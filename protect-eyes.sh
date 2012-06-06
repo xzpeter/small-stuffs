@@ -6,6 +6,7 @@
 # MOCP: the console music player
 # ZENITY: the GUI for GTK
 # GNOME-SCREENSAVER-COMMAND: to control screens and read status
+#   or MINT-SCREENSAVER-COMMAND: which is the same one on mint system
 
 # anyone can use this. xzpeter@gmail.com
 
@@ -13,6 +14,17 @@
 working_max_mins=80
 # set this to a directory that stores some musics. 
 music_dir="/media/DataVol/music/favors/"
+
+# checking the system
+if cat /etc/issue | grep Mint > /dev/null; then
+    screen_cmd="mate-screensaver-command"
+elif cat /etc/issue | grep Ubuntu > /dev/null; then
+    screen_cmd="gnome-screensaver-command"
+else
+    echo "current system not supported"
+    exit 1
+fi
+
 
 # this is the count of working seconds
 working_count=0
@@ -37,12 +49,12 @@ function warn_to_rest() {
 	n=`ls | wc -l`
 	random -e $n
 	mocp -l ${musics[$?]}
-	gnome-screensaver-command -l
+	$screen_cmd -l
     fi
 }
 
 function check_current_status() {
-    gnome-screensaver-command -q | grep 未激活 > /dev/null
+    $screen_cmd -q | grep 未激活 > /dev/null
     working=$?
     if [ $working = "0" ]; then
 	working_count=`expr $working_count + 1`
