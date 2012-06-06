@@ -1,2 +1,3 @@
-#!/usr/bin
-sudo apt-get install build-essentials sbcl emacs vim vim-gnome docky guake xclip xsunpinyin mocp zenity chromium-browser git
+#!/bin/bash
+sudo apt-get install build-essential sbcl emacs vim vim-gnome docky guake xclip xsunpinyin zenity chromium-browser git xchm chmsee wine
+# require: mocp
