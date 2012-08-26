@@ -1,0 +1,56 @@
+#!/bin/bash
+
+# this is a better script to echo colored text
+
+# TDOO:
+# 1. some of the blanks are eaten by the param transfer process. handle
+# this. 
+
+function usage() {
+    cat <<EOF
+
+This is a more powerful ECHO command with color and style support. 	
+usage: $0 <style> <things_devlier_to_echo>
+
+	Here comes the style list:
+	colors: red, green, yellow, blue, pink, purple, lightblue, grey
+
+EOF
+    exit 0
+}
+
+declare -A param_list
+param_list=(
+    ["grey"]="90"
+    ["red"]="91"
+    ["green"]="92"
+    ["yellow"]="93"
+    ["blue"]="94"
+    ["pink"]="95"
+    ["purple"]="96"
+    ["white"]="97"
+)
+
+function set_env_num() {
+    echo -en "\033[${1}m"
+}
+
+function recover_to_normal() {
+    set_env_num 97
+}
+
+# for i in $(seq 1 100); do
+#     set_env_num $i
+#     echo $i: hello!
+# done
+
+# exit 
+
+if [ $# -lt 2 ]; then
+    usage
+fi
+
+set_env_num ${param_list[$1]} 
+shift
+echo $@
+set_env_num 0
