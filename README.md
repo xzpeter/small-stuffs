@@ -5,6 +5,7 @@ Put some small and useful stuffs:
 
 protect-eyes.sh           tiny script that run under shell, to be automatically invoked to remind you have a rest
 install-mint-softs.sh     some packages to install after installing the Mint OS
+echo_c 			  a very simple wrapper for echo, with colors
 
 Some tarballs to download:
 
