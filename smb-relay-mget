@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# pull the result data from relay
+smbclient //relay/seshares "nopass" -c "tarmode; recurse; prompt; cd
+/results; mget MR4-SAS.5"

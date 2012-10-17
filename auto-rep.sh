@@ -19,12 +19,20 @@ declare -a rules=(
 "strcmp|csx_p_strcmp"
 "strnicmp|csx_p_strncasecmp"
 "lstrcmpi|csx_p_strcasecmp"
+"stricmp|csx_p_strcasecmp"
 "atoi|csx_p_atoi_u32"
 "_atoi64|csx_p_atoi_u64"
 "_strtoui64|csx_p_atoi_u64"
+"_getpid|csx_p_get_process_id"
 "sprintf|csx_p_sprintf"
 "vprintf|csx_p_stdio_vprintf"
+"_snprintf|csx_p_snprintf"
 "printf|csx_p_stdio_printf"
+"isprint|csx_isprint"
+"isspace|csx_isspace"
+"malloc|csx_p_util_mem_alloc_maybe"
+"free|csx_p_util_mem_free"
+"exit|CSX_EXIT"
 "memset|csx_p_memset"		# Caution: we may need memzero() instead
 "fprintf|csx_p_stdio_fprintf" 	# Caution: we may need stderr redefines
 "vfprintf|csx_p_stdio_vfprintf" # Caution: we may need stderr redefines
@@ -62,7 +70,7 @@ function replace_API () {
     from=$1
     to=$2
     sed_str='{s/\<'$from'\>/'$to'/g}'
-    find -name "*.c" | xargs sed -i $sed_str
+    find -name "*.c" -o -name "*.cpp" | xargs sed -i $sed_str
 }
 # replace_API "*.c" strlen csx_p_strlen
 
@@ -81,16 +89,17 @@ function do_traverse() {
 	to=${rule[1]}
 	case $1 in
 	    "list")
-		display_replacement $from $to
-		;;
+			display_replacement $from $to
+			;;
 	    "grep")
-		echo_c white -ne "displaying API: "
-		echo_c yellow $from
-		find -name "*.c" -exec grep --color "\<${from}\>" {} \+
-		;;
+			echo_c white -ne "displaying API: "
+			echo_c yellow $from
+			find -name "*.[ch]" -o -name "*.cpp" | xargs grep --color "\<${from}\>"
+			;;
 	    "replace")
-		replace_API $from $to
-		;;
+			echo "replacing $from to $to"
+			replace_API $from $to
+			;;
 	esac
     done
 }

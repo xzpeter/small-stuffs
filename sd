@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# wrapper of sdcv
+
+sdcv $@ | sed 's/\([0-9]\+\)/\n\n# \1 #/g'

@@ -5,8 +5,6 @@
 
 # first, find the files I need to check
 
-files=$(find -name "*.c")
-
 function usage() {
     cat <<EOF
 
@@ -16,10 +14,12 @@ NUMBER_LINES	SOURCE_NAME
 EOF
 }
 
-if [ $# -ne "0" ]; then
+if [ $# -eq "0" ]; then
     usage
     exit
 fi
+
+files=$(find $1 -name "*.c" -o -name "*.cpp" -o -name "*.cxx")
 
 function checkit() {
     # now checking lines
