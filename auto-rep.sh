@@ -27,11 +27,8 @@ declare -a rules=(
 "sprintf|csx_p_sprintf"
 "vprintf|csx_p_stdio_vprintf"
 "_snprintf|csx_p_snprintf"
-"printf|csx_p_stdio_printf"
 "isprint|csx_isprint"
 "isspace|csx_isspace"
-"malloc|csx_p_util_mem_alloc_maybe"
-"free|csx_p_util_mem_free"
 "exit|CSX_EXIT"
 "memset|csx_p_memset"		# Caution: we may need memzero() instead
 "fprintf|csx_p_stdio_fprintf" 	# Caution: we may need stderr redefines
@@ -39,6 +36,9 @@ declare -a rules=(
 "fgets|csx_p_stdio_fgets" 	# Caution: we may need stderr redefines
 "fflush|csx_p_stdio_fflush"	# Caution: we may need stderr redefines
 )
+# "printf|csx_p_stdio_printf"
+# "csx_p_util_mem_alloc_maybe|malloc"
+# "csx_p_util_mem_free|free"
 
 function usage() {
     cat <<EOF

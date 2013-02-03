@@ -18,7 +18,7 @@ music_dir="/media/DataVol/music/favors/"
 # checking the system
 if cat /etc/issue | grep Mint > /dev/null; then
     screen_cmd="mate-screensaver-command"
-elif cat /etc/issue | grep Ubuntu > /dev/null; then
+elif cat /etc/issue | grep -E "Ubuntu|Debian" > /dev/null; then
     screen_cmd="gnome-screensaver-command"
 else
     echo "current system not supported"
@@ -43,38 +43,53 @@ function warn_to_rest() {
     count=0
     max_bar=$warning_length_secs
     while [ 1 ]; do
-	sleep 1
-	count=`expr $count + 1`
-	bar_value=`expr 100 \* $count / $max_bar`
-	echo $bar_value
+		sleep 1
+		count=`expr $count + 1`
+		bar_value=`expr 100 \* $count / $max_bar`
+		echo $bar_value
     done | zenity --progress --text "已经工作了 ${working_max_mins} 分钟了！该
-    休息一下了！ ${warning_length_secs} 秒后进入屏幕保护...\n\n${live_longer_str}" --auto-close --no-cancel
+    休息一下了！ ${warning_length_secs} 秒后进入屏幕保护...\n\n${live_longer_str}" --auto-close
     giveup=$?
     working_count=0
     if [ $giveup = "0" ]; then
-	musics=(`ls $music_dir`)
-	n=`ls | wc -l`
-	random -e $n
-	mocp -l ${musics[$?]}
-	$screen_cmd -l
+		if [ ! -d $music_dir -a `which mocp` ]; then
+			musics=(`ls $music_dir`)
+			n=`ls | wc -l`
+			random -e $n
+			mocp -l ${musics[$?]}
+		fi
+		$screen_cmd -l
     fi
 }
 
+function am_i_working()
+{
+    $screen_cmd -q | grep -E "未激活|inactive"> /dev/null
+	if [ $? = "0" ]; then
+		echo "yes"
+	else
+		echo "no"
+	fi
+}
+
 function check_current_status() {
-    $screen_cmd -q | grep 未激活 > /dev/null
-    working=$?
-    if [ $working = "0" ]; then
-	working_count=`expr $working_count + 1`
-	echo "$working_count/$working_max_secs"
+    working=`am_i_working`
+    if [ $working = "yes" ]; then
+		working_count=`expr $working_count + 1`
+		echo "$working_count/$working_max_secs" > /dev/shm/protect-eye.current
     else
-	working_count=0
+		working_count=0
     fi
 }
+
+if [ ! -z "$1" ]; then
+	working_count=$1
+fi
 
 while [ 1 ]; do
     check_current_status
     sleep 1
     if [ $working_count -gt $working_max_secs ]; then
-	warn_to_rest
+		warn_to_rest
     fi
 done
