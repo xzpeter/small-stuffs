@@ -1,0 +1,11 @@
+[user]
+        name = xzpeter
+        email = xzpeter@gmail.com
+[alias]
+        lo = log --color --stat --summary
+        ci = commit
+        st = status
+        di = diff --color
+        br = branch --color
+[core]
+        editor = vim
