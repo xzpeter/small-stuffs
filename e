@@ -7,7 +7,7 @@ prms=`echo $@ | sed 's/\([^ :]\+\):\([0-9]\+\)/+\2 \1/g'`
 
 function emacs_running ()
 {
-	ps aux | grep -v grep | grep -q emacs
+	pgrep -x emacs >/dev/null
 }
 
 emacsclient -a emacs $prms  >/dev/null 2>&1 &
