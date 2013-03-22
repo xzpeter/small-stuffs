@@ -2,7 +2,7 @@
         name = xzpeter
         email = xzpeter@gmail.com
 [alias]
-        lo = log --color --stat --summary
+        lo = log --color --stat --summary --relative-date
         ci = commit
         co = checkout
         st = status
