@@ -4,8 +4,11 @@
 [alias]
         lo = log --color --stat --summary
         ci = commit
+        co = checkout
         st = status
         di = diff --color
         br = branch --color
 [core]
-        editor = vim
+        editor = emacsclient -a emacs
+[merge]
+        tool = meld
