@@ -1,0 +1,34 @@
+#!/bin/bash
+
+types="[ch] [ch]pp [ch]xx sh p[lm] py"
+
+usage () {
+	cat <<EOF
+
+usage: $0 [type1 [type2 [...]]]
+
+This script will give a statistic report of code lines count under current
+code base. 
+
+default types are: $types
+
+EOF
+}
+
+if [ "$1" == "-h" ]; then
+	usage
+	exit 0
+fi
+
+if [ "$1" != "" ]; then
+	types=$1
+fi
+
+echo -e "Type\t\tLines"
+echo "---------------------"
+for i in $types; do
+	lines=`find . -name "*.$i" | xargs cat | wc -l | tr -d ' '`
+	if [ $lines -gt 0 ]; then
+		echo -e ".$i\t\t$lines"
+	fi
+done
