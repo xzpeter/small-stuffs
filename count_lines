@@ -1,6 +1,6 @@
 #!/bin/bash
 
-types="[ch] [ch]pp [ch]xx sh p[lm] py"
+types="[ch] [ch]pp [ch]xx sh p[lm] py [sS]"
 
 usage () {
 	cat <<EOF
