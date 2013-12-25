@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # we have to use sed working both on Mac OS and Linux.
-if uname | grep -qi darwin; then
+if uname | grep -qiE 'darwin|freebsd'; then
 	# this is MacOS
 	sed_prm=-E
 elif uname | grep -qi linux; then
