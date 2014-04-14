@@ -1,6 +1,6 @@
 #!/bin/bash
 
-types="[ch] [ch]pp [ch]xx sh p[lm] py [sS]"
+types="[ch] [ch]pp [ch]xx sh p[lm] py [sS] java scala js el"
 
 usage () {
 	cat <<EOF
