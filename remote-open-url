@@ -1,3 +1,20 @@
 #!/bin/bash
 
-ssh mac macos-open-url "$@"
+echo "$@" >> ~/tmp/out.log
+
+# check whether it is local file or a URL link
+if [[ -z "$1" ]]; then
+        exit 0
+fi
+if [[ -f "$1" ]]; then
+        # this is a file
+        file_path="$1"
+        file_name=$(basename $file_path)
+        scp $file_path mac:~/tmp/
+        target_path="~/tmp/$file_name"
+else
+        # let us suppose this is a URL
+        target_path="$@"
+fi
+
+ssh mac macos-open-url "$target_path"
