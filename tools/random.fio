@@ -1,0 +1,11 @@
+[random]
+filename=/dev/sda
+size=1T
+blocksize=4k
+ioengine=libaio
+readwrite=randread
+randrepeat=0
+direct=1
+time_based=1
+runtime=30
+iodepth=512
