@@ -1,0 +1,19 @@
+#!/usr/bin/env stap
+
+global start_time
+
+function timestamp ()
+{
+  return gettimeofday_us()
+}
+
+probe begin
+{
+  start_time = timestamp()
+}
+
+probe kernel.function("sys_read").call
+{
+  if (pid() == target())
+	printf("%d\n", timestamp() - start_time)
+}

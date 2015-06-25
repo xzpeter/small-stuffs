@@ -1,0 +1,12 @@
+#!/usr/bin/env stap
+
+probe kernel.function("fuse_file_read_iter").call
+{
+	inode = $iocb->ki_filp->f_mapping->host
+	size = @cast(inode, "inode")->i_size
+	fc = @cast(inode, "inode")->i_sb->s_fs_info
+
+	printf("force: %d, ki_pos: %lu, count: %lu, size: %lu\n", 
+		@cast(fc, "fuse_conn")->auto_inval_data,
+		$iocb->ki_pos, $to->count, size);
+}

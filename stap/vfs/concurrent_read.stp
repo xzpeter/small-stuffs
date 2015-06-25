@@ -1,0 +1,17 @@
+#!/usr/bin/env stap
+
+global counter = 0
+
+probe kernel.function("vfs_read").call
+{
+  if (pid() == target()) {
+	counter++
+	printf("%d\n", counter)
+  }
+}
+
+probe kernel.function("vfs_read").return
+{
+  if (pid() == target())
+	counter--
+}
