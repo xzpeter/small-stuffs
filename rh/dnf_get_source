@@ -1,0 +1,59 @@
+#!/bin/bash
+
+# License: BSD
+
+set -e
+
+##############################
+# Configurations
+##############################
+tmp_root="/tmp/dnf_fetch"
+# all sources will be extracted here
+source_root="/root/codes"
+
+prog_name="$0"
+help_msg="
+usage: $prog_name <pkg_name>
+
+Download source codes of specific package to $source_root. In most cases,
+this script should work. YUM repositories should be configured correctly
+before hand.  "
+
+usage () {
+    echo "$help_msg"
+    exit 1
+}
+
+pkg_name="$1"
+
+if [ -z "$pkg_name" ]; then
+    usage
+fi
+
+echo "Trying to fetch source codes for package '$pkg_name'..."
+mkdir -p $tmp_root
+cd $tmp_root
+rm -rf $tmp_root/*.rpm          # really careful when using rm -rf
+dnf download --source $pkg_name
+
+rpm_name=$(ls *.rpm)
+echo "Installing source RPM $rpm_name..."
+rpm -i $rpm_name
+
+tarball_file=$(ls $HOME/rpmbuild/SOURCES/$pkg_name*)
+
+# diagnose how to distract it
+case $tarball_file in
+    *.tar.gz|*.tgz)
+        extractor="z"
+        ;;
+    *.tar.xz|*.txz)
+        extractor="J"
+        ;;
+esac
+
+echo "Extracting tarball $talball_file to $source_root..."
+
+tar "${extractor}xvf" $tarball_file -C $source_root
+
+echo "All done!"

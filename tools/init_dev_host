@@ -1,0 +1,38 @@
+#!/bin/bash
+set -e
+
+pkgs="git gcc automake autoconf libtool zlib zlib-devel glib2 glib2-devel"
+pkgs="$pkgs gcc-c++ pixman pixman-devel spice-server spice-protocol"
+pkgs="$pkgs spice-server-devel"
+
+show () {
+    echo "======================================"
+    echo "$@"
+    echo "======================================"
+}
+
+install_pkgs () {
+    yum install $pkgs
+}
+
+download_qemu () {
+    mkdir -p ~/git
+    git clone git://git.qemu.org/qemu.git ~/git/qemu
+}
+
+build_qemu () {
+    cd ~/git/qemu
+    bin_path=bin/debug/x86_64
+    mkdir -p $bin_path
+    cd $bin_path
+    ../../../configure --enable-debug --enable-kvm --enable-spice \
+                       --target-list=x86_64-softmmu
+    make -j8
+}
+
+show "Installing packages..."
+install_pkgs
+show "Download QEMU..."
+#download_qemu
+show "Build QEMU..."
+build_qemu
