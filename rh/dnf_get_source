@@ -40,7 +40,8 @@ rpm_name=$(ls *.rpm)
 echo "Installing source RPM $rpm_name..."
 rpm -i $rpm_name
 
-tarball_file=$(ls $HOME/rpmbuild/SOURCES/$pkg_name*)
+tarball_file=$(ls $HOME/rpmbuild/SOURCES/$pkg_name* | \
+                      grep -E "(tar.gz|tgz|tar.xz|txz)$")
 
 # diagnose how to distract it
 case $tarball_file in
