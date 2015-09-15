@@ -41,7 +41,7 @@ echo "Installing source RPM $rpm_name..."
 rpm -i $rpm_name
 
 tarball_file=$(ls $HOME/rpmbuild/SOURCES/$pkg_name* | \
-                      grep -E "(tar.gz|tgz|tar.xz|txz)$")
+                      grep -E "(tar.gz|tgz|tar.xz|txz|tar.bz2)$") || true
 
 # diagnose how to distract it
 case $tarball_file in
@@ -51,10 +51,17 @@ case $tarball_file in
     *.tar.xz|*.txz)
         extractor="J"
         ;;
+    *.tar.bz2)
+        extractor="j"
+        ;;
+    *)
+        echo "Unsupported tarball file: $tarball"
+        exit 1
+        ;;
 esac
 
 echo "Extracting tarball $talball_file to $source_root..."
 
 tar "${extractor}xvf" $tarball_file -C $source_root
 
-echo "All done!"
+echo "All done! Sources extracted to $source_root."
