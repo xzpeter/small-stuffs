@@ -1,0 +1,42 @@
+#!/bin/bash
+
+prog_name="$0"
+
+usage ()
+{
+    cat <<EOF
+usage: $prog_name <file_name> [directory]
+
+Put the <file_name> to apache root under [directory]. If [directory] is not
+provided, then put to root by default.
+EOF
+}
+
+err ()
+{
+    echo "ERROR: $@"
+    exit 1
+}
+
+web_root="/var/www/html"
+file="$1"
+dir="$2"
+
+if [[ ! -e "$file" ]]; then
+    echo "File $file does not exist"
+    exit 1
+fi
+
+full_dir="${web_root}/${dir}"
+if [[ ! -e $full_dir ]]; then
+    echo -n "Create directory $full_dir? (yes/no) "
+    read answer
+    if [[ "$answer" != yes ]]; then
+        echo "Cancel operation"
+        exit 1
+    fi
+    mkdir -p $full_dir || err "Failed create dir $full_dir"
+fi
+
+cp -rf $file $full_dir
+echo "Done"
