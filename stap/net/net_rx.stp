@@ -1,0 +1,20 @@
+#!/usr/bin/env stap
+
+global pid_list
+
+probe begin
+{
+  printf("start sampling\n");
+}
+
+probe kernel.function("net_rx_action").call
+{
+  pid_list[pid()]++;
+}
+
+probe end
+{
+  foreach ([pid] in pid_list) {
+	printf("PID %d triggered %d times\n", pid, pid_list[pid]);
+  }
+}
