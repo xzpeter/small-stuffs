@@ -1,0 +1,49 @@
+#!/bin/bash
+
+prog_name=$0
+
+usage ()
+{
+    cat <<EOF
+usage: $prog_name <cmd>
+
+supportted cmds:
+
+qemu-build:    build QEMU repository.
+EOF
+    exit 1
+}
+
+do_qemu_build ()
+{
+    local current=$(pwd)
+    local pdir=$(dirname $current)
+    local top=$(basename $current)
+
+    if [[ "$top" != "bin" ]]; then
+        echo "please run this under QEMU_ROOT/bin"
+        return 1
+    fi
+
+    ../configure --target-list=x86_64-softmmu --enable-debug --enable-spice
+    if [[ $? != 0 ]]; then
+        echo "configure failed, stop here"
+        return 1
+    fi
+
+    make -j8
+    if [[ $? != 0 ]]; then
+        echo "build failed... stop here"
+        return 1
+    fi
+}
+
+cmd=$1
+
+case $cmd in
+    qemu-build) do_qemu_build ;;
+    *)
+        usage ;;
+esac
+
+exit $?

@@ -1,0 +1,48 @@
+#! /usr/bin/env stap
+
+global ifxmit, ifrecv
+global ifmerged
+global report = 0
+
+probe netdev.transmit if (!report)
+{
+  ifxmit[dev_name] <<< length
+}
+
+probe netdev.receive if (!report)
+{
+  ifrecv[dev_name] <<< length
+}
+
+function print_activity()
+{
+  printf("timestamp: %d\n%-7s %7s %7s %7s %7s %7s %7s\n",
+    gettimeofday_us(), "DEV", "XMIT_PK", "RECV_PK",
+    "XMIT_KB", "RECV_KB", "XMIT_MSS_KB", "RECV_MSS_KB")
+  foreach ([dev] in ifrecv) {
+    ifmerged[dev] += @count(ifrecv[dev]);
+  }
+  foreach ([dev] in ifxmit) {
+    ifmerged[dev] += @count(ifxmit[dev]);
+  }
+  foreach ([dev] in ifmerged-) {
+    n_xmit = @count(ifxmit[dev])
+    n_recv = @count(ifrecv[dev])
+    xmit_KB = n_xmit ? @sum(ifxmit[dev])/1024 : 0
+    recv_KB = n_recv ? @sum(ifrecv[dev])/1024 : 0
+    xmit_mss = n_xmit ? @sum(ifxmit[dev])/1024/n_xmit : 0
+    recv_mss = n_recv ? @sum(ifrecv[dev])/1024/n_recv : 0
+    printf("%-7s %7d %7d %7d %7d %7d %7d\n\n",
+      dev, n_xmit, n_recv, xmit_KB, recv_KB, xmit_mss, recv_mss)
+  } 
+  delete ifmerged
+  delete ifxmit
+  delete ifrecv
+}
+
+probe timer.ms(500), end, error
+{
+  report = 1
+  print_activity()
+  report = 0
+}

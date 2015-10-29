@@ -1,0 +1,17 @@
+probe module("null_blk").function("null_queue_rq").call 
+{
+  print_backtrace();
+  printf("\n");
+}
+
+probe module("null_blk").function("null_init_hctx").call
+{
+  print_backtrace();
+  printf("\n");
+}
+
+probe module("null_blk").function("null_softirq_done_fn").call
+{
+  print_backtrace();
+  printf("\n");
+}

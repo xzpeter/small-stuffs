@@ -1,0 +1,125 @@
+#!/usr/bin/env python
+
+import os
+import sys
+
+prog_name = sys.argv[0]
+help_msg = """
+usage: %(prog)s <DATA_FILE>
+
+This script to parse lines of data into simple histogram. For each line of
+DATA_FILE, it should only contain one number. The output should be one
+histogram of the number series.
+""" % {"prog": prog_name}
+
+# how many buckets
+n_buckets = 20
+
+def usage ():
+    print help_msg
+    sys.exit(2)
+
+def err (s):
+    print("ERROR: " + s)
+    sys.exit(1)
+
+class Buckets ():
+    def __init__(self, v_min, v_max, count):
+        """@v_min should be the min number in the series, and @v_max should
+        be the max value. @count is a hint that tells how many buckets
+        should be there (but not a must)"""
+        # we have to be smart enough to see how to partition the buckets so
+        # that it feels best for humans to read the histogram.
+        if v_min > 0 and (v_max - v_min) > v_min:
+            # this is some kind of data like network response time. It is
+            # mainly random numbers starts from zero and may spread across
+            # the axis.
+            max_len = len(str(int(v_max))) - 1
+            b_max = (10 ** max_len) * int(v_max / (10 ** max_len) + 1)
+            b_min = 0
+        else:
+            self.err("still do not know how to make bucket (%s/%s)" %\
+                     (v_min, v_max))
+
+        if count < 3:
+            self.err("count (%s) should be larger than 3" % count)
+
+        # we should make sure that all data are in:
+        # b_min <= v < b_max
+        self.b_min = b_min
+        self.b_max = b_max
+        self.b_int = (b_max - b_min) / count
+        print("bucket max %s min %s" % (self.b_max, self.b_min))
+
+        self.count = count
+        self.__buckets = [0] * count
+
+    def err (self, s):
+        raise Exception(s)
+
+    def put (self, value):
+        if value < self.b_min:
+            self.err("too small value (%s < %s)" % (value, self.b_min))
+        if value >= self.b_max:
+            self.err("too big value (%s >= %s)" % (value, self.b_max))
+        n = (value - self.b_min) / self.b_int
+        self.__buckets[int(n)] += 1
+
+    def show (self):
+        i = 0
+        while i < self.count:
+            left = self.b_min + self.b_int * i
+            right = left + self.b_int
+            value = self.__buckets[i]
+            print("[%s - %s]: %s" % (left, right, value))
+            i += 1
+
+def main():
+    if len(sys.argv) == 1:
+        usage()
+
+    if sys.argv[1] in ["-h", "--help", "help"]:
+        usage()
+
+    datafile = sys.argv[1]
+
+    if not os.access(datafile, os.R_OK):
+        err("failed to access data file: %s" % datafile)
+
+    fd = open(datafile)
+
+    inited = False
+    v_min = v_max = v_sum = v_count = 0
+    print("parsing data to get min/max/aver values...")
+    while True:
+        line = fd.readline().strip()
+        if not line:
+            break
+        v = float(line)
+        v_sum += v
+        v_count += 1
+        if not inited:
+            v_min = v_max = v
+            inited = True
+            continue
+        if v < v_min:
+            v_min = v
+        if v > v_max:
+            v_max = v
+
+    print("data max = %s, min = %s, aver = %s" % \
+          (v_max, v_min, v_sum / v_count))
+
+    fd.seek(0)
+    buckets = Buckets(v_min, v_max, n_buckets)
+    print("bucketing data..")
+    while True:
+        line = fd.readline().strip()
+        if not line:
+            break
+        v = float(line)
+        buckets.put(v)
+
+    buckets.show()
+
+main()
