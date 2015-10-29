@@ -10,7 +10,14 @@ usage: $prog_name <cmd>
 supportted cmds:
 
 qemu-build:    build QEMU repository.
+init-dev:      init dev environment for host
 EOF
+    exit 1
+}
+
+err ()
+{
+    echo "ERROR: $@"
     exit 1
 }
 
@@ -38,10 +45,35 @@ do_qemu_build ()
     fi
 }
 
+do_init_dev ()
+{
+    local files=".inputrc .bashrc .gitconfig .vimrc"
+    local host="$1"
+
+    if [[ -z "$host" ]]; then
+        cat <<EOF
+usage: $prog_name init-dev <host>
+
+Init dev environment for <host>. <host> is required.
+EOF
+        return 1
+    fi
+
+    echo "copy SSH public key..."
+    ssh-copy-id $host || err "failed copy SSH public key"
+
+    echo "copy config files..."
+    for file in $files; do
+        path=/root/$file
+        scp $path $host:$path || err "copy file $path failed"
+    done
+}
+
 cmd=$1
 
 case $cmd in
     qemu-build) do_qemu_build ;;
+    init-dev) do_init_dev $2 ;;
     *)
         usage ;;
 esac
