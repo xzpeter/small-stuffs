@@ -11,6 +11,7 @@ supportted cmds:
 
 qemu-build:    build QEMU repository.
 init-dev:      init dev environment for host
+build-initrd:  build initrd.img from directory
 EOF
     exit 1
 }
@@ -69,11 +70,34 @@ EOF
     done
 }
 
+do_build_initrd ()
+{
+    local dir="$1"
+    if [[ -z "$dir" ]]; then
+        cat <<EOF
+usage: $prog_name build-initrd <dir>
+
+Build initrd.img file by packing dir.
+EOF
+        exit 1
+    fi
+    local img="$PWD/initrd.img"
+    pushd $dir &> /dev/null
+    find . | cpio -H newc -o | gzip > $img
+    if [[ $? == 0 ]]; then
+        echo "initrd created at $img"
+    else
+        echo "creation failed"
+    fi
+    popd &> /dev/null
+}
+
 cmd=$1
 
 case $cmd in
     qemu-build) do_qemu_build ;;
     init-dev) do_init_dev $2 ;;
+    build-initrd) do_build_initrd $2 ;;
     *)
         usage ;;
 esac
