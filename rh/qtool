@@ -12,6 +12,8 @@ supportted cmds:
 qemu-build:    build QEMU repository.
 init-dev:      init dev environment for host
 build-initrd:  build initrd.img from directory
+kernel-run:    run specific kernel using QEMU
+kernel-quit:   stop the running kernel...
 EOF
     exit 1
 }
@@ -70,26 +72,93 @@ EOF
     done
 }
 
+initrd_img="initrd.img"
+
 do_build_initrd ()
 {
     local dir="$1"
+    local err=0
     if [[ -z "$dir" ]]; then
         cat <<EOF
 usage: $prog_name build-initrd <dir>
 
-Build initrd.img file by packing dir.
+Build $initrd_img file by packing dir.
 EOF
         exit 1
     fi
-    local img="$PWD/initrd.img"
+
+    # check /init script
+    if [[ ! -f "$dir/init" ]]; then
+        echo "please provide $dir/init file (at least!)"
+        return 1
+    fi
+
+    local img="$PWD/$initrd_img"
     pushd $dir &> /dev/null
     find . | cpio -H newc -o | gzip > $img
     if [[ $? == 0 ]]; then
-        echo "initrd created at $img"
+        echo "$initrd_img created at $img"
+        err=0
     else
-        echo "creation failed"
+        echo "failed to create $initrd_img"
+        err=1
     fi
     popd &> /dev/null
+    return $err
+}
+
+# before run this, we should have the following directories under PWD:
+# "kernel": as INSTALL_PATH for kernel make
+# "initramfs": rootfs for the system to be booted
+# "modules": as INSTALL_MOD_PATH for kernel make (currently not used)
+do_kernel_run()
+{
+    kernel_dir="$PWD/kernel"
+    initrd_dir="$PWD/initramfs"
+    qemu_bin=$(which qemu-kvm 2>/dev/null)
+
+    if [[ $? != 0 ]]; then
+        echo "please install qemu-kvm first"
+        return 1
+    fi
+
+    if [[ ! -d "$kernel_dir" ]]; then
+        echo "cannot find kernel dir $kernel_dir"
+        return 1
+    fi
+
+    if [[ ! -d "$initrd_dir" ]]; then
+        echo "cannot find initramfs dir $initrd_dir"
+        return 1
+    fi
+
+    # build initrd every time!
+    if ! do_build_initrd $initrd_dir; then
+        return 1
+    fi
+
+    # try to find the kernel
+    kernel_file=$(find $kernel_dir -name "vmlinuz*")
+    lines=$(echo "$kernel_file" | wc -l)
+
+    if [[ "$lines" != 1 ]]; then
+        echo "found more than one kernel under $kernel_dir?"
+        return 1
+    fi
+
+    $qemu_bin -enable-kvm -m 1024 -kernel $kernel_file \
+              -initrd $initrd_img -nographic \
+              -append "console=ttyS0" -s
+
+    # after this, we should be able to debug the kernel using:
+    # $ gdb $VMLINUX_PATH
+    # (gdb) set architecture i386:x86-64:intel
+    # (gdb) target remote localhost:1234
+}
+
+do_kernel_quit ()
+{
+    pkill -f "$prog_name kernel-run"
 }
 
 cmd=$1
@@ -98,6 +167,8 @@ case $cmd in
     qemu-build) do_qemu_build ;;
     init-dev) do_init_dev $2 ;;
     build-initrd) do_build_initrd $2 ;;
+    kernel-run) do_kernel_run ;;
+    kernel-quit) do_kernel_quit ;;
     *)
         usage ;;
 esac
