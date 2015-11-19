@@ -35,7 +35,9 @@ do_qemu_build ()
         return 1
     fi
 
-    ../configure --target-list=x86_64-softmmu --enable-debug --enable-spice
+    ../configure --target-list=x86_64-softmmu --enable-debug \
+                 --enable-spice --enable-usb-redir
+
     if [[ $? != 0 ]]; then
         echo "configure failed, stop here"
         return 1
@@ -148,7 +150,7 @@ do_kernel_run()
 
     $qemu_bin -enable-kvm -m 1024 -kernel $kernel_file \
               -initrd $initrd_img -nographic \
-              -append "console=ttyS0" -s
+              -append "console=ttyS0" -s -S
 
     # after this, we should be able to debug the kernel using:
     # $ gdb $VMLINUX_PATH
