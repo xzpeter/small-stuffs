@@ -1,7 +1,7 @@
 _qtool_complete()
 {
     local sub_cmd_list
-	sub_cmd_list=$(qtool | sed '1,4d; s/:.*//')
+    sub_cmd_list=$(qtool | sed '1,4d; s/:.*//')
     COMPREPLY=()
     prev="${COMP_WORDS[COMP_CWORD-1]}"
     cur="${COMP_WORDS[COMP_CWORD]}"
