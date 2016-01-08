@@ -31,6 +31,16 @@ do_qemu_build ()
     local current=$(pwd)
     local pdir=$(dirname $current)
     local top=$(basename $current)
+    local args="$@"
+
+    if [[ "$args" == "--help" ]]; then
+        cat <<EOF
+usage: $prog_name qemu-build [extra-config-params]
+
+Configure/Build QEMU under $QEMU_REPO/bin/ directory.
+EOF
+        return 1
+    fi
 
     if [[ "$top" != "bin" ]]; then
         echo "please run this under QEMU_ROOT/bin"
@@ -38,7 +48,7 @@ do_qemu_build ()
     fi
 
     ../configure --target-list=x86_64-softmmu --enable-debug \
-                 --enable-spice --enable-usb-redir
+                 --enable-spice --enable-usb-redir $@
 
     if [[ $? != 0 ]]; then
         echo "configure failed, stop here"
@@ -113,7 +123,8 @@ EOF
 
 # before run this, we should have the following directories under PWD:
 # "kernel": as INSTALL_PATH for kernel make
-# "initramfs": rootfs for the system to be booted
+# "initramfs": rootfs for the system to be booted. to create one,
+#              check: http://jootamam.net/howto-initramfs-image.htm
 # "modules": as INSTALL_MOD_PATH for kernel make (currently not used)
 do_kernel_run()
 {
@@ -211,7 +222,7 @@ cmd=$1
 shift 1
 
 case $cmd in
-    qemu-build) do_qemu_build ;;
+    qemu-build) do_qemu_build $@ ;;
     init-dev) do_init_dev $1 ;;
     build-initrd) do_build_initrd $1 ;;
     kernel-run) do_kernel_run ;;
