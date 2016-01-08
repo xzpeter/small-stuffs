@@ -9,12 +9,13 @@ usage: $prog_name <cmd>
 
 supportted cmds:
 
-qemu-build:    build QEMU repository.
-init-dev:      init dev environment for host
-build-initrd:  build initrd.img from directory
-kernel-run:    run specific kernel using QEMU
-kernel-quit:   stop the running kernel...
-auto-apply:    apply patche list automatically
+qemu-build:            build QEMU repository.
+init-dev:              init dev environment for host
+create-initrd-root:    create basic initramfs under directory specified
+build-initrd:          build initrd.img from directory
+kernel-run:            run specific kernel using QEMU
+kernel-quit:           stop the running kernel...
+auto-apply:            apply patche list automatically
 
 EOF
     exit 1
@@ -128,6 +129,8 @@ EOF
 # "modules": as INSTALL_MOD_PATH for kernel make (currently not used)
 do_kernel_run()
 {
+    # specify "-S" to halt QEMU when boot
+    extra_params="$@"
     kernel_dir="$PWD/kernel"
     initrd_dir="$PWD/initramfs"
     qemu_bin=$(which qemu-kvm 2>/dev/null)
@@ -163,7 +166,7 @@ do_kernel_run()
 
     $qemu_bin -enable-kvm -m 1024 -kernel $kernel_file \
               -initrd $initrd_img -nographic \
-              -append "console=ttyS0" -s -S
+              -append "console=ttyS0" -s $extra_params
 
     # after this, we should be able to debug the kernel using:
     # $ gdb $VMLINUX_PATH
@@ -218,14 +221,127 @@ do_auto_apply()
     echo "Please service yourself to cleanup *.orig."
 }
 
+init_script_def='#!/bin/sh
+
+# Based on: http://jootamam.net/howto-initramfs-image.htm
+
+# Create all the symlinks to /bin/busybox
+/bin/busybox --install -s /bin
+
+# Mount things needed by this script
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+
+# Disable kernel messages from popping onto the screen
+# echo 0 > /proc/sys/kernel/printk
+
+# Create device nodes
+mknod /dev/null c 1 3
+mknod /dev/tty c 5 0
+mdev -s
+
+# Function for parsing command line options with "=" in them
+# get_opt("init=/sbin/init") will return "/sbin/init"
+get_opt() {
+        echo "$@" | cut -d "=" -f 2
+}
+
+# Defaults
+init="/sbin/init"
+root="/dev/vda1"
+
+# Process command line options
+for i in $(cat /proc/cmdline); do
+        case $i in
+                root\=*)
+                        root=$(get_opt $i)
+                        ;;
+                init\=*)
+                        init=$(get_opt $i)
+                        ;;
+        esac
+done
+
+# Mount the root device
+mount "${root}" /newroot
+
+# Check if $init exists and is executable
+if [[ -x "/newroot/${init}" ]] ; then
+        # Unmount all other mounts so that the ram used by
+        # the initramfs can be cleared after switch_root
+        umount /sys /proc
+
+        #Switch to the new root and execute init
+        exec switch_root /newroot "${init}"
+fi
+
+# This will only be run if the exec above failed
+echo "Failed to switch_root, dropping to a shell"
+exec sh
+'
+
+do_create_initrd_root ()
+{
+    local dir_name="$1"
+
+    if [[ -z "$dir_name" ]]; then
+        cat <<EOF
+usage: $prog_name create-initrd-root <dir_name>
+
+This command will create one minimum rootfs layout under <dir_name>
+specified.
+EOF
+        return 1
+    fi
+
+    if [[ -e "$dir_name" ]]; then
+        echo -n "Path $dir_name exists, "
+        echo "please manually remove it before hand"
+        return 1
+    fi
+
+    local busybox_path=$(which busybox 2>&1)
+    if [[ $? != 0 ]]; then
+        echo "Failed to find busybox, please install it before hand"
+        return 1
+    fi
+
+    mkdir $dir_name || err "create dir $dir_name failed"
+
+    cd $dir_name
+    local dir_list="bin sbin etc proc sys newroot"
+    local name=""
+
+    echo "Creating directories: $dir_list"
+    for name in $dir_list; do
+        mkdir $name
+    done
+
+    echo "Creating mdev.conf"
+    touch etc/mdev.conf
+
+    echo "Installing busybox"
+    cp $busybox_path bin/busybox
+    chmod a+x bin/busybox
+    ln -s busybox bin/sh
+
+    echo "Creating /init"
+    echo "$init_script_def" > init
+    chmod a+x init
+
+    echo "Initramfs root created under $dir_name successfully."
+    return 0
+}
+
 cmd=$1
 shift 1
 
 case $cmd in
     qemu-build) do_qemu_build $@ ;;
     init-dev) do_init_dev $1 ;;
+    create-initrd-root) do_create_initrd_root $@ ;;
     build-initrd) do_build_initrd $1 ;;
-    kernel-run) do_kernel_run ;;
+    kernel-run) do_kernel_run $@ ;;
     kernel-quit) do_kernel_quit ;;
     auto-apply) do_auto_apply $@ ;;
     *)
