@@ -1,0 +1,26 @@
+#!/bin/bash
+
+prog_name=$0
+server=file-nay:public_html
+
+usage() {
+    cat <<EOF
+usage: $prog_name <path> <remote_path>
+
+Transfer local <path> to file-nay:public_html/<remote_path>
+
+Example:
+
+# $prog_name ./upload_dir upload_dir
+EOF
+    exit 1
+}
+
+path=$1
+remote_path=$2
+
+if [[ -z "$path" || -z "$remote_path" ]]; then
+    usage
+fi
+
+scp -r $path $server/$remote_path
