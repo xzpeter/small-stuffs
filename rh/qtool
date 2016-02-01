@@ -15,7 +15,10 @@ create-initrd-root:    create basic initramfs under directory specified
 build-initrd:          build initrd.img from directory
 kernel-run:            run specific kernel using QEMU
 kernel-quit:           stop the running kernel...
+kernel-install:        install the kernel (to specific VM)
+kernel-boot:           choose which version of kernel to boot in host
 auto-apply:            apply patche list automatically
+auto-bisect:           automatic bisection of bad codes
 
 EOF
     exit 1
@@ -333,6 +336,253 @@ EOF
     return 0
 }
 
+__host_ssh_reachable ()
+{
+    ssh $1 ls &> /dev/null
+}
+
+do_kernel_install ()
+{
+    local output_dir="$1"
+    # set this if we want to copy the kernels to VM
+    local vm="$2"
+
+    if [[ -z "$output_dir" || -z "$vm" ]]; then
+        cat <<EOF
+usage: $prog_name kernel-install <output_dir> <vm>
+
+This will install kernel and modules in <output_dir> into <vm>.
+
+<output_dir>: this directory should contain kernel and modules which
+              is installed before-hand by something like:
+
+# make install modules_install \
+  INSTALL_PATH=<output_dir> INSTALL_MOD_PATH=<output_dir>
+
+<vm>: should be the name of the VM, with SSH pub key copied before
+      hand.
+
+EOF
+        return 1
+    fi
+
+    if [[ ! -e "$output_dir" ]]; then
+        echo "output dir $output_dir does not exist"
+        return 1
+    fi
+
+    if ! __host_ssh_reachable $vm; then
+        echo "VM $vm not reachable by SSH"
+        return 1
+    fi
+
+    # get kernel version
+    local kernel_version=""
+    kernel_version=$(ls $output_dir/vmlinuz-*)
+    if [[ $? != 0 ]]; then
+        echo "failed to find file $output_dir/vmlinuz-*"
+        return 1
+    fi
+    kernel_version=${kernel_version##*vmlinuz-}
+    echo "Kernel version to install:  '$kernel_version'"
+    echo "Remote machine hostname:    '$vm'"
+    echo -n "Sure to go? (enter to continue) "
+    read y
+
+    # cleanup "build" and "source" in case they are soft links
+    local module_dir="$output_dir/lib/modules/${kernel_version}"
+    if [[ ! -d $module_dir ]]; then
+        echo "failed to find module directory: $module_dir"
+        return 1
+    fi
+    for file in build source; do
+        rm -f $module_dir/$file
+    done
+
+    echo "removing old kernels and modules (if exists)"
+    # kernel and system map
+    ssh $vm rm -f /boot/*${kernel_version}
+    # the initramfs
+    ssh $vm rm -f /boot/*${kernel_version}.img
+    ssh $vm rm -rf /lib/modules/${kernel_version}
+
+    echo "installing modules"
+    scp -r $module_dir $vm:/lib/modules > /dev/null
+
+    echo "installing kernel"
+    scp $output_dir/*-${kernel_version} $vm:/boot/ > /dev/null
+
+    echo "generating initramfs"
+    ssh $vm dracut --kver $kernel_version
+
+    echo "updating grub2"
+    ssh $vm grub2-mkconfig -o /boot/grub2/grub.cfg
+
+    echo "all done"
+}
+
+do_kernel_boot_select ()
+{
+    local vm="$1"
+    local version="$2"
+
+    if [[ -z "$vm" || -z "$version" ]]; then
+        cat <<EOF
+usage: $prog_name kernel-boot <host> <kernel_version>
+
+Modify grub configuration to boot into <kernel_version> next time. 
+EOF
+        return 1
+    fi
+
+    if ! __host_ssh_reachable $vm; then
+        echo "host $vm not reachable"
+        return 1
+    fi
+
+    local index=""
+    index=$(ssh $vm grub2-mkconfig -o /boot/grub2/grub.cfg 2>&1 | \
+                sed -n '/linux image/p' | sed -n /${version}\$/=)
+    if [[ -z "$index" ]]; then
+        echo "failed to find kernel version $version on host $vm"
+        return 1
+    fi
+    # move start offset to 0 (not 1)
+    index=$(( $index - 1 ))
+    ssh $vm sed -i "s\/^GRUB_DEFAULT=.*\$\/GRUB_DEFAULT=${index}\/" \
+        /etc/default/grub
+    ssh $vm grub2-mkconfig -o /boot/grub2/grub.cfg &> /dev/null
+}
+
+qtool_def_bisect_script=".qtool.bisect"
+
+__auto_bisect_help()
+{
+    cat <<EOF
+usage:
+
+# $prog_name auto-bisect generate
+
+  Generate the default bisect file $qtool_def_bisect_script
+
+# $prog_name auto-bisect run
+
+  Run the bisect script $qtool_def_bisect_script
+
+The script file should contain the following functions:
+
+qtool_bisect_prepare:    build codes into binaries, and install
+qtool_bisect_run:        run scripts to trigger the bug, return 0
+                         means test pass, ~0 means test fail
+
+The logic of bisection will be:
+
+1. qtool_bisect_prepare
+2. qtool_bisect_run --> result
+3. update result to git
+4. finished ? (END) : (goto 1.)
+EOF
+    return 1
+}
+
+__auto_bisect_generate_script ()
+{
+    if [[ -e $1 ]]; then
+        echo "found existing script at $1, please remove before new"
+        return 1
+    fi
+    cat > $1 <<EOF
+#!/bin/bash
+
+qtool_bisect_prepare ()
+{
+    echo "Preparing for run..."
+
+    # do everything needed for the new run, should include but not
+    # limited to: build, install, config, etc.
+
+    # return 0 on success, 1 on error
+    return 0
+}
+
+qtool_bisect_run ()
+{
+    echo "Running bisect script..."
+
+    # run script to see whether test pass
+
+    # return 0 on test pass, 1 on fail, 2 on error
+    return 0
+}
+EOF
+}
+
+__auto_bisect_run()
+{
+    local round=1
+    local result=0
+    source $1
+
+    while true; do
+        echo "###############################"
+        echo "# Round $round of prepare"
+        echo "###############################"
+        if ! qtool_bisect_prepare; then
+            echo "failed prepare bisect"
+            return 1
+        fi
+
+        echo "###############################"
+        echo "# Round $round of run"
+        echo "###############################"
+        qtool_bisect_run
+        result=$?
+
+        case $result in
+            1) git_answer=bad ;;
+            0) git_answer=good ;;
+            *)
+                echo "error happened during running bisect script"
+                return 1
+                ;;
+        esac
+
+        echo "#######################################"
+        echo "# Round $round of git update: $git_answer"
+        echo "#######################################"
+        git bisect $git_answer | grep -q "first bad"
+        if [[ $? == 0 ]]; then
+            # we got the bad one
+            echo "found bad commit, stop here"
+            git bisect log | tail -1
+            break
+        fi
+
+        round=$(( $round + 1 ))
+    done
+
+    return 0
+}
+
+do_auto_bisect ()
+{
+    local cmd="$1"
+    local script="$qtool_def_bisect_script"
+
+    if [[ -z "$cmd" ]]; then
+        __auto_bisect_help
+        return 1
+    fi
+
+    case $cmd in
+        generate) __auto_bisect_generate_script $script ;;
+        run) __auto_bisect_run $script ;;
+        *) __auto_bisect_help ;;
+    esac
+
+    return $?
+}
+
 cmd=$1
 shift 1
 
@@ -343,9 +593,11 @@ case $cmd in
     build-initrd) do_build_initrd $1 ;;
     kernel-run) do_kernel_run $@ ;;
     kernel-quit) do_kernel_quit ;;
+    kernel-install) do_kernel_install $@ ;;
+    kernel-boot) do_kernel_boot_select $@ ;;
     auto-apply) do_auto_apply $@ ;;
-    *)
-        usage ;;
+    auto-bisect) do_auto_bisect $@ ;;
+    *) usage ;;
 esac
 
 exit $?
