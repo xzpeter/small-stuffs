@@ -8,6 +8,7 @@
 
 import os
 import sys
+import json
 
 prog_name = sys.argv[0]
 usage_msg = """
@@ -41,6 +42,7 @@ d_min = -1
 d_max = -1
 d_total = 0
 d_count = 0
+data_list = []
 
 while True:
     line = fd.readline()
@@ -69,8 +71,21 @@ while True:
             d_min = data
         if data > d_max:
             d_max = data
+    data_list.append([data, count])
+    if len(data_list) >= 2 and data < data_list[-2][0]:
+        err("histogram not sorted!")
     d_total += data * count
     d_count += count
 
-print("summary: min=%s, aver=%s, max=%s" % (d_min, d_total /
-                                            d_count, d_max))
+# find 99% point
+n_99p = int(d_count * 0.99)
+v_99p = -1
+cur = 0
+for data, count in data_list:
+    cur += count
+    if cur >= n_99p:
+        v_99p = data
+        break
+
+print("summary: min=%s, aver=%s, max=%s, count=%s, v_99p=%s" \
+      % (d_min, d_total / d_count, d_max, d_count, v_99p))
