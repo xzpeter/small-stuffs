@@ -343,31 +343,23 @@ __host_ssh_reachable ()
 
 do_kernel_install ()
 {
-    local output_dir="$1"
     # set this if we want to copy the kernels to VM
-    local vm="$2"
+    local vm="$1"
+    local set_default="$3"
+    local output_dir="qtool_output"
 
-    if [[ -z "$output_dir" || -z "$vm" ]]; then
+    if [[ -z "$vm" ]]; then
         cat <<EOF
-usage: $prog_name kernel-install <output_dir> <vm>
+usage: $prog_name kernel-install <vm> [set_default]
 
-This will install kernel and modules in <output_dir> into <vm>.
-
-<output_dir>: this directory should contain kernel and modules which
-              is installed before-hand by something like:
-
-# make install modules_install \
-  INSTALL_PATH=<output_dir> INSTALL_MOD_PATH=<output_dir>
+This will install kernel and modules into <vm>.
 
 <vm>: should be the name of the VM, with SSH pub key copied before
       hand.
 
+[set_default]: set this parameter non-empty to set new kernel as
+               default one
 EOF
-        return 1
-    fi
-
-    if [[ ! -e "$output_dir" ]]; then
-        echo "output dir $output_dir does not exist"
         return 1
     fi
 
@@ -375,6 +367,13 @@ EOF
         echo "VM $vm not reachable by SSH"
         return 1
     fi
+
+    rm -rf $output_dir
+    mkdir $output_dir
+    echo "Preparing kernel..."
+    make install INSTALL_PATH=$output_dir
+    echo "Preparing modules..."
+    make modules_install INSTALL_MOD_PATH=$output_dir
 
     # get kernel version
     local kernel_version=""
@@ -386,8 +385,6 @@ EOF
     kernel_version=${kernel_version##*vmlinuz-}
     echo "Kernel version to install:  '$kernel_version'"
     echo "Remote machine hostname:    '$vm'"
-    echo -n "Sure to go? (enter to continue) "
-    read y
 
     # cleanup "build" and "source" in case they are soft links
     local module_dir="$output_dir/lib/modules/${kernel_version}"
@@ -417,6 +414,11 @@ EOF
 
     echo "updating grub2"
     ssh $vm grub2-mkconfig -o /boot/grub2/grub.cfg
+
+    if [[ -n "$set_default" ]]; then
+        echo "setting default boot kernel to $kernel_version"
+        qtool kernel-boot $vm $kernel_version
+    fi
 
     echo "all done"
 }
@@ -527,6 +529,7 @@ __auto_bisect_run()
         echo "###############################"
         echo "# Round $round of prepare"
         echo "###############################"
+        date
         if ! qtool_bisect_prepare; then
             echo "failed prepare bisect"
             return 1
@@ -535,6 +538,7 @@ __auto_bisect_run()
         echo "###############################"
         echo "# Round $round of run"
         echo "###############################"
+        date
         qtool_bisect_run
         result=$?
 
