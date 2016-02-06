@@ -410,7 +410,7 @@ EOF
     scp $output_dir/*-${kernel_version} $vm:/boot/ > /dev/null
 
     echo "generating initramfs"
-    ssh $vm dracut --kver $kernel_version
+    ssh $vm dracut -H --kver $kernel_version
 
     echo "updating grub2"
     ssh $vm grub2-mkconfig -o /boot/grub2/grub.cfg
