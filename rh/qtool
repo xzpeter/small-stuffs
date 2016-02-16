@@ -46,13 +46,14 @@ EOF
         return 1
     fi
 
-    if [[ "$top" != "bin" ]]; then
-        echo "please run this under QEMU_ROOT/bin"
+    if [[ ! "$top" == bin* ]]; then
+        echo "please run this under QEMU_ROOT/bin*"
         return 1
     fi
 
-    ../configure --target-list=x86_64-softmmu --enable-debug \
-                 --enable-spice --enable-usb-redir $@
+    ../configure --target-list=x86_64-softmmu,aarch64-softmmu \
+                 --enable-debug --enable-spice \
+                 --enable-usb-redir $@
 
     if [[ $? != 0 ]]; then
         echo "configure failed, stop here"
@@ -345,20 +346,27 @@ do_kernel_install ()
 {
     # set this if we want to copy the kernels to VM
     local vm="$1"
-    local set_default="$3"
+    shift 1
+    local params="$@"
+    local set_default=false
+    local kernel_only=false
     local output_dir="qtool_output"
 
     if [[ -z "$vm" ]]; then
         cat <<EOF
-usage: $prog_name kernel-install <vm> [set_default]
+usage: $prog_name kernel-install <vm> [option [option...]]
 
 This will install kernel and modules into <vm>.
 
 <vm>: should be the name of the VM, with SSH pub key copied before
       hand.
 
-[set_default]: set this parameter non-empty to set new kernel as
-               default one
+Supported options:
+
+set_default: set this parameter non-empty to set new kernel as
+             default one
+kernel_only: only install compressed kernel to /boot
+
 EOF
         return 1
     fi
@@ -368,12 +376,24 @@ EOF
         return 1
     fi
 
+    local param=""
+    for param in $params; do
+        case $param in
+            set_default) set_default=true ;;
+            kernel_only) kernel_only=true ;;
+            *) echo "unknown option: $param"; return 1 ;;
+        esac
+    done
+
     rm -rf $output_dir
     mkdir $output_dir
+
+    ##############################
+    # kernel
+    ##############################
+
     echo "Preparing kernel..."
     make install INSTALL_PATH=$output_dir
-    echo "Preparing modules..."
-    make modules_install INSTALL_MOD_PATH=$output_dir
 
     # get kernel version
     local kernel_version=""
@@ -386,6 +406,24 @@ EOF
     echo "Kernel version to install:  '$kernel_version'"
     echo "Remote machine hostname:    '$vm'"
 
+    echo "removing old kernel (if exists)"
+    ssh $vm rm -f /boot/*${kernel_version}
+
+    echo "installing kernel"
+    scp $output_dir/*-${kernel_version} $vm:/boot/ > /dev/null
+
+    if $kernel_only; then
+        echo "doing kernel-only install, done."
+        return 0
+    fi
+
+    ##############################
+    # modules
+    ##############################
+
+    echo "Preparing modules..."
+    make modules_install INSTALL_MOD_PATH=$output_dir
+
     # cleanup "build" and "source" in case they are soft links
     local module_dir="$output_dir/lib/modules/${kernel_version}"
     if [[ ! -d $module_dir ]]; then
@@ -396,9 +434,7 @@ EOF
         rm -f $module_dir/$file
     done
 
-    echo "removing old kernels and modules (if exists)"
-    # kernel and system map
-    ssh $vm rm -f /boot/*${kernel_version}
+    echo "removing old modules (if exists)"
     # the initramfs
     ssh $vm rm -f /boot/*${kernel_version}.img
     ssh $vm rm -rf /lib/modules/${kernel_version}
@@ -406,16 +442,13 @@ EOF
     echo "installing modules"
     scp -r $module_dir $vm:/lib/modules > /dev/null
 
-    echo "installing kernel"
-    scp $output_dir/*-${kernel_version} $vm:/boot/ > /dev/null
-
     echo "generating initramfs"
     ssh $vm dracut -H --kver $kernel_version
 
     echo "updating grub2"
     ssh $vm grub2-mkconfig -o /boot/grub2/grub.cfg
 
-    if [[ -n "$set_default" ]]; then
+    if $set_default; then
         echo "setting default boot kernel to $kernel_version"
         qtool kernel-boot $vm $kernel_version
     fi
