@@ -9,16 +9,17 @@ usage: $prog_name <cmd>
 
 supportted cmds:
 
-qemu-build:            build QEMU repository.
-init-dev:              init dev environment for host
-create-initrd-root:    create basic initramfs under directory specified
-build-initrd:          build initrd.img from directory
-kernel-run:            run specific kernel using QEMU
-kernel-quit:           stop the running kernel...
-kernel-install:        install the kernel (to specific VM)
-kernel-boot:           choose which version of kernel to boot in host
 auto-apply:            apply patche list automatically
 auto-bisect:           automatic bisection of bad codes
+build-initrd:          build initrd.img from directory
+create-initrd-root:    create basic initramfs under directory specified
+init-dev:              init dev environment for host
+kernel-boot:           choose which version of kernel to boot in host
+kernel-install:        install the kernel (to specific VM)
+kernel-quit:           stop the running kernel...
+kernel-run:            run specific kernel using QEMU
+qemu-build:            build QEMU repository.
+send-patch:            send patches using git-send-email
 
 EOF
     exit 1
@@ -620,6 +621,89 @@ do_auto_bisect ()
     return $?
 }
 
+do_send_patch ()
+{
+    local maillist="$1"
+    local cclist="$2"
+    shift 2
+    local patchlist="$@"
+    local tolist=""
+    local param=""
+
+    if [[ -z "$patchlist" ]]; then
+        cat <<EOF
+usage: $prog_name send-patch <mailing lists> <cc list> <patch1> ...
+
+<mailing list> and <cc list> items should be splitted by comma
+(",").
+
+Send patch list to specific mailing list, with all the people CCed
+in the CC list.
+EOF
+        return 1
+    fi
+
+    maillist="${maillist//,/ }"
+    cclist="${cclist//,/ }"
+
+    local mlist=""
+    for mlist in ${maillist}; do
+        case $mlist in
+            qemu*) tolist="$tolist qemu-devel@nongnu.org" ;;
+            libvir*) tolist="$tolist libvir-list@redhat.com" ;;
+            # this is specific email address
+            *@*) tolist="$tolist $mlist" ;;
+            *) echo "Unknown mailing list: $mlist"; return 1 ;;
+        esac
+    done
+
+    local item=""
+
+    if [[ -z "$tolist" ]]; then
+        echo "To: cannot be empty"
+        return 1
+    fi
+
+    echo "Sending To:"
+    echo
+    for item in $tolist; do
+        echo " $item"
+        param="$param --to=$item"
+    done
+    echo
+
+    echo "CC To:"
+    echo
+    if [[ -n "$cclist" ]]; then
+        for item in $cclist; do
+            echo "  $item"
+            param="$param --cc=$item"
+        done
+    else
+        echo "  (nobody)"
+    fi
+    echo
+
+    echo "Patches to send:"
+    echo
+    for item in $patchlist; do
+        echo "  $item"
+        param="$param $item"
+    done
+    echo
+
+    echo -n "Ready to send? (y/n) "
+    read y
+    if [[ $y != y ]]; then
+        echo "Aborted."
+        return 0
+    fi
+
+    echo "Sending..."
+    git send-email $param
+    echo "Done."
+}
+
 cmd=$1
 shift 1
 
@@ -634,6 +718,7 @@ case $cmd in
     kernel-boot) do_kernel_boot_select $@ ;;
     auto-apply) do_auto_apply $@ ;;
     auto-bisect) do_auto_bisect $@ ;;
+    send-patch) do_send_patch $@ ;;
     *) usage ;;
 esac
 
