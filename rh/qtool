@@ -20,6 +20,7 @@ kernel-quit:           stop the running kernel...
 kernel-run:            run specific kernel using QEMU
 qemu-build:            build QEMU repository.
 send-patch:            send patches using git-send-email
+ssh-host:              SSH to host, with line buffering
 
 EOF
     exit 1
@@ -704,6 +705,23 @@ EOF
     echo "Done."
 }
 
+do_ssh_host()
+{
+    local host="$1"
+    if [[ -z "$host" ]]; then
+        cat <<EOF
+usage: $prog_name <host>
+
+SSH to <host> with line buffering. This might be easy to use when
+ping has a very big latency from local to <host>.
+EOF
+        return 1
+    fi
+
+    local line=""
+    cat | ssh $host
+}
+
 cmd=$1
 shift 1
 
@@ -719,6 +737,7 @@ case $cmd in
     auto-apply) do_auto_apply $@ ;;
     auto-bisect) do_auto_bisect $@ ;;
     send-patch) do_send_patch $@ ;;
+    ssh-host) do_ssh_host $@ ;;
     *) usage ;;
 esac
 
