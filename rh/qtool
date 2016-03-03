@@ -668,7 +668,7 @@ EOF
     echo "Sending To:"
     echo
     for item in $tolist; do
-        echo " $item"
+        echo "  $item"
         param="$param --to=$item"
     done
     echo
