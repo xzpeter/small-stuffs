@@ -1,6 +1,7 @@
 #!/bin/bash
 
 prog_name=$0
+my_email="peterx@redhat.com"
 
 usage ()
 {
@@ -625,7 +626,8 @@ do_auto_bisect ()
 do_send_patch ()
 {
     local maillist="$1"
-    local cclist="$2"
+    # always CC myself.
+    local cclist="$2,$my_email"
     shift 2
     local patchlist="$@"
     local tolist=""
