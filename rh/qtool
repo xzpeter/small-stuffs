@@ -14,6 +14,10 @@ auto-apply:            apply patche list automatically
 auto-bisect:           automatic bisection of bad codes
 build-initrd:          build initrd.img from directory
 create-initrd-root:    create basic initramfs under directory specified
+fake-editor:           this is a fake editor, it pauses, wait for a
+                       SIGUSR1 and then quit with errno=0
+git-commit-add-cc:     auto-generate CC list for commit
+fix-commit:            fix specific commit (rebase)
 init-dev:              init dev environment for host
 kernel-boot:           choose which version of kernel to boot in host
 kernel-install:        install the kernel (to specific VM)
@@ -724,6 +728,103 @@ EOF
     cat | ssh $host
 }
 
+# relative path to store temp buffer for git rebase -i
+git_rebase_todo=".git/rebase-merge/git-rebase-todo"
+
+# this must be done before everything, since we are calling err() to
+# quit when check failed
+git_root_check()
+{
+    if [[ ! -d ".git" ]]; then
+        err "Please run command under root dir of git repo"
+    fi
+}
+
+git_no_modify_check ()
+{
+    if git status | grep -qw modified; then
+        err "Detected modified files, please clean first"
+    fi
+}
+
+git_config_core_editor_check ()
+{
+    local editor=""
+    editor=$(git config core.editor --local 2>/dev/null)
+    if [[ $? != 0 ]]; then
+        err "Failed fetch core.editor"
+    fi
+
+    if [[ -n "$editor" ]]; then
+        err "Please make sure local core.editor not set"
+    fi
+}
+
+git_fake_editor_check()
+{
+    if pgrep -fa fake-editor &> /dev/null; then
+        err "Please stop all fake-editor"
+    fi
+}
+
+git_rebase_pre_check_all()
+{
+    git_root_check
+    git_no_modify_check
+    git_config_core_editor_check
+    git_fake_editor_check
+}
+
+do_git_commit_add_cc ()
+{
+    :
+}
+
+do_git_commit_fix ()
+{
+    local commit="$1"
+
+    if [[ -z "$commit" ]]; then
+        cat <<EOF
+usage: $prog_name <commit>
+
+Fix specific commit using rebase. After fix, please use:
+
+# git rebase --continue
+
+To continue.
+EOF
+        return 1
+    fi
+
+    git_rebase_pre_check_all
+    git config --local core.editor "$prog_name fake-editor"
+    # TODO: here we'd better capture PID of the fake editor
+    git rebase -i "${commit}~" &> /dev/null &
+    while [[ ! -f "$git_rebase_todo" ]]; do
+        # wait for git-rebase to prepare the file
+        sleep 0.1
+    done
+    sed -i '1 s/pick/edit/' $git_rebase_todo
+    # notify fake editor to quit
+    pkill -f -USR1 "$prog_name fake-editor"
+    echo "We are on commit:"
+    git log -1 --oneline
+    echo "Please use 'git rebase --continue' after fix done."
+}
+
+# To play the trick, we trap USR1 signal. When script is ready to do
+# anything, we can just signal this process with USR1 to quit
+# gracefully.
+do_fake_editor ()
+{
+    trap "keep=false" USR1
+    while $keep; do
+        sleep 0.05
+    done
+    return 0
+}
+
 cmd=$1
 shift 1
 
@@ -740,6 +841,9 @@ case $cmd in
     auto-bisect) do_auto_bisect $@ ;;
     send-patch) do_send_patch $@ ;;
     ssh-host) do_ssh_host $@ ;;
+    git-commit-add-cc) do_git_commit_add_cc $@ ;;
+    fix-commit) do_git_commit_fix $@ ;;
+    fake-editor) do_fake_editor $@ ;;
     *) usage ;;
 esac
 
