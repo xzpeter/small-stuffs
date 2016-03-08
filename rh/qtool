@@ -2,6 +2,14 @@
 
 prog_name=$0
 my_email="peterx@redhat.com"
+my_fullname="Peter Xu"
+my_sob_line="Signed-off-by: ${my_fullname} <${my_email}>"
+debug=false
+
+# we count the user of the fake editor, when reach zero, we unset
+# the fake editor. To gain ref, use git_set_fake_editor(), to
+# release ref, use git_unset_fake_editor()
+fake_editor_refcount=0
 
 usage ()
 {
@@ -16,7 +24,9 @@ build-initrd:          build initrd.img from directory
 create-initrd-root:    create basic initramfs under directory specified
 fake-editor:           this is a fake editor, it pauses, wait for a
                        SIGUSR1 and then quit with errno=0
-git-commit-add-cc:     auto-generate CC list for commit
+git-commit-set-cc:     auto-generate CC list for commit
+                       (this will remove all existing CC list!)
+git-commit-get-cc:     list all CC list for specific commit
 fix-commit:            fix specific commit (rebase)
 init-dev:              init dev environment for host
 kernel-boot:           choose which version of kernel to boot in host
@@ -31,10 +41,32 @@ EOF
     exit 1
 }
 
+debug ()
+{
+    if $debug; then
+        echo -n "[DEBUG_QTOOL] " >&2
+        echo $@ >&2
+    fi
+}
+
 err ()
 {
     echo "ERROR: $@"
     exit 1
+}
+
+wait_until_file_exists ()
+{
+    while [[ ! -f "$1" ]]; do
+        sleep 0.1
+    done
+}
+
+wait_pid_quit ()
+{
+    while kill -0 $1 &> /dev/null; do
+        sleep 0.1
+    done
 }
 
 do_qemu_build ()
@@ -728,9 +760,6 @@ EOF
     cat | ssh $host
 }
 
-# relative path to store temp buffer for git rebase -i
-git_rebase_todo=".git/rebase-merge/git-rebase-todo"
-
 # this must be done before everything, since we are calling err() to
 # quit when check failed
 git_root_check()
@@ -750,11 +779,11 @@ git_no_modify_check ()
 git_config_core_editor_check ()
 {
     local editor=""
-    editor=$(git config core.editor --local 2>/dev/null)
-    if [[ $? != 0 ]]; then
-        err "Failed fetch core.editor"
+    if [[ $fake_editor_refcount != 0 ]]; then
+        # we are in, no need to check
+        return
     fi
-
+    editor=$(git config --local core.editor 2>/dev/null)
     if [[ -n "$editor" ]]; then
         err "Please make sure local core.editor not set"
     fi
@@ -767,6 +796,17 @@ git_fake_editor_check()
     fi
 }
 
+git_commit_check()
+{
+    local commit="$1"
+    if [[ -z "$commit" ]]; then
+        err "commit empty"
+    fi
+    if ! git show -s --oneline $commit &> /dev/null; then
+        err "commit $commit does not exist"
+    fi
+}
+
 git_rebase_pre_check_all()
 {
     git_root_check
@@ -775,9 +815,83 @@ git_rebase_pre_check_all()
     git_fake_editor_check
 }
 
-do_git_commit_add_cc ()
+git_using_fake_editor()
 {
-    :
+    local editor=$(git config --local core.editor 2>/dev/null)
+    return [[ "$editor" == *fake-editor* ]]
+}
+
+git_set_fake_editor()
+{
+    fake_editor_refcount=$(( $fake_editor_refcount + 1 ))
+    debug "fake editor cnt: $fake_editor_refcount"
+
+    if [[ $fake_editor_refcount == 1 ]]; then
+        debug "setting fake editor"
+        git config --local core.editor "$prog_name fake-editor"
+    fi
+}
+
+git_unset_fake_editor()
+{
+    fake_editor_refcount=$(( $fake_editor_refcount - 1 ))
+    debug "fake editor cnt: $fake_editor_refcount"
+
+    if [[ $fake_editor_refcount == 0 ]]; then
+        debug "unsetting fake editor"
+        git config --local --unset core.editor
+    fi
+}
+
+# this is the file to store which file we are editing on. Current we
+# still do not support concurrent operations. However, is that
+# matter? I suppose in most cases not, since we are simulating a
+# human being from his typing, man!
+fake_editing_file=".fake_editor.current_path"
+
+# To play the trick, we trap USR1 signal. When script is ready to do
+# anything, we can just signal this process with USR1 to quit
+# gracefully.
+do_fake_editor ()
+{
+    # save current editing file path
+    echo "$1" > $fake_editing_file
+    trap "keep=false" USR1
+    while $keep; do
+        # some other people (possibly scripts :) is editing this
+        # file.. let's wait a SIGUSR1 from thay guy!
+        sleep 0.05
+    done
+    return 0
+}
+
+fake_editor_close()
+{
+    # notify fake editor to quit
+    pkill -f -USR1 "$prog_name fake-editor"
+}
+
+# get which file to read, also, we will make sure the file is there
+# when return
+fake_editor_get_path()
+{
+    local file=""
+    # first, make sure our fake editor starts working, and it will
+    # drop the path of file-to-edit here...
+    wait_until_file_exists $fake_editing_file
+
+    file=$(cat $fake_editing_file)
+    debug "fake editor currently editing file: $file"
+    # secondly, we need to make sure the file to be edited is
+    # existing too (for git operations, git will help create them
+    # with some init state, we need to wait for its ready).
+    wait_until_file_exists $file
+
+    # remove it after we used it
+    rm -f $fake_editing_file
+
+    # tell caller
+    echo $file
 }
 
 do_git_commit_fix ()
@@ -797,32 +911,168 @@ EOF
         return 1
     fi
 
+    local git_rebase_todo=""
+    local rebase_pid=""
+
     git_rebase_pre_check_all
-    git config --local core.editor "$prog_name fake-editor"
+    git_set_fake_editor
+
     # TODO: here we'd better capture PID of the fake editor
     git rebase -i "${commit}~" &> /dev/null &
-    while [[ ! -f "$git_rebase_todo" ]]; do
-        # wait for git-rebase to prepare the file
-        sleep 0.1
-    done
+    rebase_pid=$!
+
+    git_rebase_todo=$(fake_editor_get_path)
+
     sed -i '1 s/pick/edit/' $git_rebase_todo
-    # notify fake editor to quit
-    pkill -f -USR1 "$prog_name fake-editor"
+
+    fake_editor_close
+    # we need to wait for "git rebase" finish its work, so that we
+    # can have good tree status to move on
+    wait_pid_quit $rebase_pid
+
+    git_unset_fake_editor
+
     echo "We are on commit:"
-    git log -1 --oneline
+    git show -s --oneline
     echo "Please use 'git rebase --continue' after fix done."
 }
 
-# To play the trick, we trap USR1 signal. When script is ready to do
-# anything, we can just signal this process with USR1 to quit
-# gracefully.
-do_fake_editor ()
+# this could be an alias of real get_maintainer script. We need to
+# do the aliasing manually. The script should be able to work just
+# as QEMU/Linux scripts/get_maintainer.pl.
+get_maintainer_script="./.get_maintainer"
+
+get_maintainer_script_check()
 {
-    trap "keep=false" USR1
-    while $keep; do
-        sleep 0.05
+    if [[ ! -e "$get_maintainer_script" ]]; then
+        err "failed to find script: $get_maintainer_script"
+    fi
+}
+
+# split using "|"
+cc_filter_list="qemu-devel@nongnu.org"
+
+do_git_commit_get_cc ()
+{
+    local commit="$1"
+
+    if [[ -z "$commit" ]]; then
+        cat <<EOF
+usage: $prog_name git-commit-get-cc <commit|A..B>
+
+Get CC list for specific commit, or commit range.
+
+List of emails to be filtered out:
+
+$cc_filter_list
+EOF
+        return 1
+    fi
+
+    git_root_check
+    get_maintainer_script_check
+
+    if [[ "$commit" == *..* ]]; then
+        # this is a range
+        :
+    else
+        # this is a commit
+        git_commit_check $commit
+        commit="${commit}~..${commit}"
+    fi
+
+    git diff ${commit} | $get_maintainer_script | \
+        sed 's/ (.*//; s/^/CC: /' | grep -vE "$cc_filter_list"
+}
+
+do_git_commit_set_cc_one ()
+{
+    local commit="$1"
+
+    if [[ -z "$commit" ]]; then
+        cat <<EOF
+usage: $prog_name git-commit-set-cc <commit>
+
+Will automatically add "CC:" lines for specific commit. This is
+EXTREMELY DANGEROUS, please make sure you know what this is doing
+before using it. To do this, rebase is required.
+EOF
+        return 1
+    fi
+
+    git_commit_check $commit
+    git_set_fake_editor
+
+    echo "Trying to auto-generate CC: lines for commit $commit."
+
+    # first, switch to that commit using rebase
+    do_git_commit_fix $commit > /dev/null
+
+    # still using fake-editor, remember? ;)
+    git commit --amend &> /dev/null &
+
+    local commit_path=$(fake_editor_get_path)
+    local tmp_path="./.temp_commit_msg"
+    local answer=""
+
+    echo "Original commit msg for $commit:"
+    echo "================================"
+    cat $commit_path | grep -v "^#" | tee $tmp_path
+    echo "================================"
+
+    # first of all, remove existing CCs
+    sed -i '/^CC: /d' $tmp_path
+
+    # then, add all maintainer CCs
+    local line=""
+    do_git_commit_get_cc HEAD | while read line; do
+        sed -i "/${my_sob_line}/i ${line}" $tmp_path
     done
-    return 0
+
+    echo "New commit msg for $commit:"
+    echo "================================"
+    cat $tmp_path
+    echo "================================"
+
+    echo -n "Good to go? (y/n) "
+    read answer
+    if [[ "$answer" == y ]]; then
+        echo "Committing changes"
+        cp $tmp_path $commit_path
+    else
+        echo "Giving up changes"
+    fi
+
+    fake_editor_close
+
+    git rb --continue &> /dev/null
+
+    # release fake editor refcount
+    git_unset_fake_editor
+}
+
+do_git_commit_set_cc()
+{
+    local commit="$1"
+
+    if [[ -z "$commit" ]]; then
+        cat <<EOF
+usage: $prog_name git-commit-set-cc <commit|-N|A..B>
+
+<commit> can be one specific commit number, or something like "-3"
+or "A..B" to do automatic CC appending for all the commits in the
+range.
+EOF
+        return 1
+    fi
+
+    local line=""
+    local commits=""
+
+    commits=$(git show -s --oneline $commit | awk '{print $1}')
+    for commit in $commits; do
+        do_git_commit_set_cc_one $commit
+    done
 }
 
 cmd=$1
@@ -841,7 +1091,8 @@ case $cmd in
     auto-bisect) do_auto_bisect $@ ;;
     send-patch) do_send_patch $@ ;;
     ssh-host) do_ssh_host $@ ;;
-    git-commit-add-cc) do_git_commit_add_cc $@ ;;
+    git-commit-set-cc) do_git_commit_set_cc $@ ;;
+    git-commit-get-cc) do_git_commit_get_cc $@ ;;
     fix-commit) do_git_commit_fix $@ ;;
     fake-editor) do_fake_editor $@ ;;
     *) usage ;;
