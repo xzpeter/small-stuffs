@@ -33,6 +33,7 @@ kernel-boot:           choose which version of kernel to boot in host
 kernel-install:        install the kernel (to specific VM)
 kernel-quit:           stop the running kernel...
 kernel-run:            run specific kernel using QEMU
+prepare-send:          prepare one script to send patches
 qemu-build:            build QEMU repository.
 send-patch:            send patches using git-send-email
 ssh-host:              SSH to host, with line buffering
@@ -1076,6 +1077,21 @@ EOF
     done
 }
 
+do_prepare_send ()
+{
+    local script=".send.sh"
+    if [[ -f $script ]]; then
+        echo "Script $script already exist!"
+        return 1
+    fi
+    cat > $script <<EOF
+#!/bin/bash
+qtool send-patch
+EOF
+    chmod a+x $script
+    echo "Script generated at $script."
+}
+
 cmd=$1
 shift 1
 
@@ -1096,6 +1112,7 @@ case $cmd in
     git-commit-get-cc) do_git_commit_get_cc $@ ;;
     fix-commit) do_git_commit_fix $@ ;;
     fake-editor) do_fake_editor $@ ;;
+    prepare-send) do_prepare_send $@ ;;
     *) usage ;;
 esac
 
