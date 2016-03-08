@@ -1042,6 +1042,7 @@ EOF
     else
         echo "Giving up changes"
     fi
+    rm -f $tmp_path
 
     fake_editor_close
 
