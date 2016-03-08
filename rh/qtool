@@ -1086,7 +1086,10 @@ do_prepare_send ()
     fi
     cat > $script <<EOF
 #!/bin/bash
-qtool send-patch
+to_list=
+cc_list=
+patches=
+qtool send-patch \$to_list \$cc_list \$patches
 EOF
     chmod a+x $script
     echo "Script generated at $script."
