@@ -93,7 +93,7 @@ EOF
 
     ../configure --target-list=x86_64-softmmu,aarch64-softmmu \
                  --enable-debug --enable-spice \
-                 --enable-usb-redir $@
+                 --enable-usb-redir $args
 
     if [[ $? != 0 ]]; then
         echo "configure failed, stop here"
