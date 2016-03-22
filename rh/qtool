@@ -691,6 +691,8 @@ EOF
         case $mlist in
             qemu*) tolist="$tolist qemu-devel@nongnu.org" ;;
             libvir*) tolist="$tolist libvir-list@redhat.com" ;;
+            lkml|kernel)
+                tolist="$tolist linux-kernel@vger.kernel.org" ;;
             # this is specific email address
             *@*) tolist="$tolist $mlist" ;;
             *) echo "Unknown mailing list: $mlist"; return 1 ;;
