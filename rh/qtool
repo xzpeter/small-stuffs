@@ -27,7 +27,8 @@ fake-editor:           this is a fake editor, it pauses, wait for a
 git-commit-set-cc:     auto-generate CC list for commit
                        (this will remove all existing CC list!)
 git-commit-get-cc:     list all CC list for specific commit
-fix-commit:            fix specific commit (rebase)
+git-fix-commit:        fix specific git commit (rebase)
+git-self-review:       do self review of git commits
 init-dev:              init dev environment for host
 kernel-boot:           choose which version of kernel to boot in host
 kernel-install:        install the kernel (to specific VM)
@@ -969,6 +970,35 @@ EOF
     echo "Please use 'git rebase --continue' after fix done."
 }
 
+git_self_review_hook ()
+{
+    # edit all commits
+    sed -i 's/^pick/edit/' $1
+}
+
+
+do_git_self_review ()
+{
+    local commit="$1"
+
+    if [[ -z "$commit" ]]; then
+        cat <<EOF
+usage: $prog_name <commit>
+
+Do self review of commits from <commit>. This is to rebase to that
+commit, and edit one by one. This is very useful when we want to do
+self-review of written patches, and modify in-place when we need.
+EOF
+        return 1
+    fi
+
+    git_rebase_with_hook $commit git_self_review_hook
+
+    echo "We are on commit:"
+    git show -s --oneline
+    echo "Please use 'git rebase --continue' to move on the review."
+}
+
 # this could be an alias of real get_maintainer script. We need to
 # do the aliasing manually. The script should be able to work just
 # as QEMU/Linux scripts/get_maintainer.pl.
@@ -1144,7 +1174,8 @@ case $cmd in
     ssh-host) do_ssh_host $@ ;;
     git-commit-set-cc) do_git_commit_set_cc $@ ;;
     git-commit-get-cc) do_git_commit_get_cc $@ ;;
-    fix-commit) do_git_commit_fix $@ ;;
+    git-self-review) do_git_self_review $@ ;;
+    git-fix-commit) do_git_commit_fix $@ ;;
     fake-editor) do_fake_editor $@ ;;
     prepare-send) do_prepare_send $@ ;;
     *) usage ;;
