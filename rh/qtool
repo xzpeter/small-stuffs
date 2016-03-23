@@ -897,6 +897,54 @@ fake_editor_get_path()
     echo $file
 }
 
+# This function will emulate the rebase operation of the user. This
+# is used for command "fix-commit" and "git-self-review".
+#
+# Parameters:
+#
+# 1. commit number to rebase on
+# 2. a hook function to run to simulate the rebase editing
+#    procedure. The function should take one argument, which is the
+#    file of GIT_REBASE_TODO, which is possibly located in .git/
+#    directory. In the hook function, we can modify the todo file as
+#    our wish.
+git_rebase_with_hook ()
+{
+    local commit="$1"
+    local hook_func="$2"
+
+    if [[ -z "$commit" || -z "$hook_func" ]]; then
+        err "need commit and hook func"
+    fi
+
+    local git_rebase_todo=""
+    local rebase_pid=""
+
+    git_rebase_pre_check_all
+    git_set_fake_editor
+
+    # TODO: here we'd better capture PID of the fake editor
+    git rebase -i "${commit}~" &> /dev/null &
+    rebase_pid=$!
+
+    git_rebase_todo=$(fake_editor_get_path)
+
+    eval $hook_func $git_rebase_todo
+
+    fake_editor_close
+    # we need to wait for "git rebase" finish its work, so that we
+    # can have good tree status to move on
+    wait_pid_quit $rebase_pid
+
+    git_unset_fake_editor
+}
+
+git_commit_fix_hook ()
+{
+    # edit current commit only
+    sed -i '1 s/pick/edit/' $1
+}
+
 do_git_commit_fix ()
 {
     local commit="$1"
@@ -914,26 +962,7 @@ EOF
         return 1
     fi
 
-    local git_rebase_todo=""
-    local rebase_pid=""
-
-    git_rebase_pre_check_all
-    git_set_fake_editor
-
-    # TODO: here we'd better capture PID of the fake editor
-    git rebase -i "${commit}~" &> /dev/null &
-    rebase_pid=$!
-
-    git_rebase_todo=$(fake_editor_get_path)
-
-    sed -i '1 s/pick/edit/' $git_rebase_todo
-
-    fake_editor_close
-    # we need to wait for "git rebase" finish its work, so that we
-    # can have good tree status to move on
-    wait_pid_quit $rebase_pid
-
-    git_unset_fake_editor
+    git_rebase_with_hook $commit git_commit_fix_hook
 
     echo "We are on commit:"
     git show -s --oneline
