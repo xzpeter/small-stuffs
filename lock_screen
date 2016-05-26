@@ -1,0 +1,11 @@
+#!/bin/bash
+
+cmd="$1"
+color=269851
+
+i3lock -c $color
+
+case $cmd in
+    suspend) systemctl suspend ;;
+    *) ;;
+esac

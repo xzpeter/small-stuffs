@@ -1,0 +1,56 @@
+#!/bin/bash
+
+# This is a shell daemon that will be launched on my dev machine when
+# boot. Let's put everything useful here.
+
+logfile="/var/log/shell-daemon.log"
+
+log () {
+    date >> $logfile
+    echo "$@" >> $logfile
+}
+
+cur_mouse_id=""
+
+mouse_name_keywords="(USB|M185/M225)"
+
+find_mouse_ids() {
+    local line lines
+    xinput | grep "slave *pointer" | while read line; do
+        if echo "$line" | grep -qE $mouse_name_keywords; then
+            line=${line##*id=}
+            echo $line | awk '{print $1}'
+        fi
+    done
+}
+
+configure_mouse_natural_scroll () {
+    local id="$1"
+    local line
+    # line=$(xinput list-props $id | grep "Natural Scrolling Enabled (")
+    # line=${line##*\(}
+    # line=${line%%\)*}
+    # if [[ -z "$line" ]]; then
+    #     return 1
+    # fi
+    line=276
+    xinput set-prop $id $line 1
+}
+
+fix_mouse_natrual_scrolling () {
+    local id ids
+    ids=$(find_mouse_ids)
+    for id in $ids; do
+        configure_mouse_natural_scroll $id
+        # if [[ $? == 0 ]]; then
+        #     log "Configured mouse ID $id to natrual scroll"
+        # else
+        #     log "Failed to configure mouse ID $id"
+        # fi
+    done
+}
+
+while true; do
+    fix_mouse_natrual_scrolling
+    sleep 3
+done
