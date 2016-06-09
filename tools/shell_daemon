@@ -6,8 +6,8 @@
 logfile="/var/log/shell-daemon.log"
 
 log () {
-    date >> $logfile
-    echo "$@" >> $logfile
+    date
+    echo "$@"
 }
 
 cur_mouse_id=""
@@ -27,13 +27,12 @@ find_mouse_ids() {
 configure_mouse_natural_scroll () {
     local id="$1"
     local line
-    # line=$(xinput list-props $id | grep "Natural Scrolling Enabled (")
-    # line=${line##*\(}
-    # line=${line%%\)*}
-    # if [[ -z "$line" ]]; then
-    #     return 1
-    # fi
-    line=276
+    line=$(xinput list-props $id | grep "Natural Scrolling Enabled (")
+    line=${line##*\(}
+    line=${line%%\)*}
+    if [[ -z "$line" ]]; then
+        return 1
+    fi
     xinput set-prop $id $line 1
 }
 
@@ -42,11 +41,11 @@ fix_mouse_natrual_scrolling () {
     ids=$(find_mouse_ids)
     for id in $ids; do
         configure_mouse_natural_scroll $id
-        # if [[ $? == 0 ]]; then
-        #     log "Configured mouse ID $id to natrual scroll"
-        # else
-        #     log "Failed to configure mouse ID $id"
-        # fi
+        if [[ $? == 0 ]]; then
+            log "Configured mouse ID $id to natrual scroll"
+        else
+            log "Failed to configure mouse ID $id"
+        fi
     done
 }
 
