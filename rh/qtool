@@ -38,6 +38,7 @@ prepare-send:          prepare one script to send patches
 qemu-build:            build QEMU repository.
 send-patch:            send patches using git-send-email
 ssh-host:              SSH to host, with line buffering
+vpnc-dial-in:          dial in VPN
 
 EOF
     exit 1
@@ -1156,6 +1157,23 @@ EOF
     echo "Script generated at $script."
 }
 
+do_vpnc_dial_in()
+{
+    vpnc_cmd="vpnc redhat"
+
+    while pgrep -f "$vpnc_cmd" | read pid; do
+        echo "Detected existing vpnc process, killing..."
+        kill $pid
+        sleep 1
+    done
+
+    $vpnc_cmd
+
+    sleep 1
+    echo "Re-starting offlineimap service..."
+    pkill -9 -f /usr/bin/offlineimap
+}
+
 cmd=$1
 shift 1
 
@@ -1178,6 +1196,7 @@ case $cmd in
     git-fix-commit) do_git_commit_fix $@ ;;
     fake-editor) do_fake_editor $@ ;;
     prepare-send) do_prepare_send $@ ;;
+    vpnc-dial-in) do_vpnc_dial_in $@ ;;
     *) usage ;;
 esac
 
