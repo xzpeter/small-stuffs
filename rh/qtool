@@ -30,7 +30,9 @@ git-commit-get-cc:     list all CC list for specific commit
 git-fix-commit:        fix specific git commit (rebase)
 git-self-review:       do self review of git commits
 init-dev:              init dev environment for host
+kernel-backtrace:      dump backtrace for kernel function
 kernel-boot:           choose which version of kernel to boot in host
+kernel-grep-function:  find kernel function with key
 kernel-install:        install the kernel (to specific VM)
 kernel-quit:           stop the running kernel...
 kernel-run:            run specific kernel using QEMU
@@ -1161,7 +1163,7 @@ do_vpnc_dial_in()
 {
     vpnc_cmd="vpnc redhat"
 
-    while pgrep -f "$vpnc_cmd" | read pid; do
+    pgrep -f "$vpnc_cmd" | while read pid; do
         echo "Detected existing vpnc process, killing..."
         kill $pid
         sleep 1
@@ -1178,6 +1180,103 @@ do_vpnc_dial_in()
     pkill -9 -f /usr/bin/offlineimap
 
     return 0
+}
+
+__trace_root="/sys/kernel/debug/tracing"
+__set_ftrace_filter="$__trace_root/set_ftrace_filter"
+__available_filter_functions="$__trace_root/available_filter_functions"
+__trace_pipe="$__trace_root/trace_pipe"
+
+ftrace_set_on ()
+{
+    echo $1 > $__trace_root/tracing_on
+}
+
+ftrace_log_clear ()
+{
+    echo > $__trace_root/trace
+}
+
+ftrace_current_set()
+{
+    echo $1 > $__trace_root/current_tracer
+}
+
+ftrace_function_filter_clear()
+{
+    local line=""
+
+    # remove all function tracepoints
+    echo > $__set_ftrace_filter
+
+    # clear all other tracepoints
+    cat $__set_ftrace_filter | grep 'stacktrace:unlimited' | while read line; do
+        echo '!'"${line%%:unlimited}" > $__set_ftrace_filter
+    done
+}
+
+ftrace_reset()
+{
+    ftrace_set_on 0
+    ftrace_log_clear
+    ftrace_current_set nop
+    ftrace_function_filter_clear
+}
+
+ftrace_dump_pipe()
+{
+    trap 'echo -e "\rSTOPPING TRACE DUMP"' SIGINT SIGTERM
+    echo "STARTING TRACE DUMP"
+    cat $__trace_pipe
+}
+
+ftrace_function_exists()
+{
+    grep -qw $1 $__available_filter_functions
+}
+
+ftrace_do_backtrace()
+{
+    local func=""
+    for func in $@; do
+        if ! ftrace_function_exists $func; then
+            echo "Function $func does not exist"'!'
+            return 1
+        fi
+        # it did exist, hook with backtrace
+        echo "Adding stacktrace hook for $func"
+        echo "${func}:stacktrace" >> $__set_ftrace_filter
+    done
+}
+
+do_backtrace ()
+{
+    local func_list="$@"
+
+    if [[ -z "$func_list" ]]; then
+        cat <<EOF
+usage: $prog_name backtrace <func1> [func2 [func3 ...]]
+
+Trace kernel function and dump backtrace for it.
+
+CAUTION: this is based on ftrace and cannot be used in parallel with
+other ftrace consumers like trace-cmd, etc.
+EOF
+        return 1
+    fi
+
+    ftrace_reset
+    if ftrace_do_backtrace $func_list; then
+        ftrace_set_on 1
+        ftrace_dump_pipe
+    fi
+    # do clean up no matter what happened
+    ftrace_reset
+}
+
+do_kernel_grep_function()
+{
+    grep -E --color $1 $__available_filter_functions
 }
 
 cmd=$1
@@ -1203,6 +1302,8 @@ case $cmd in
     fake-editor) do_fake_editor $@ ;;
     prepare-send) do_prepare_send $@ ;;
     vpnc-dial-in) do_vpnc_dial_in $@ ;;
+    kernel-backtrace) do_backtrace $@ ;;
+    kernel-grep-function) do_kernel_grep_function $@ ;;
     *) usage ;;
 esac
 
