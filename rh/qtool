@@ -29,6 +29,7 @@ git-commit-set-cc:     auto-generate CC list for commit
 git-commit-get-cc:     list all CC list for specific commit
 git-fix-commit:        fix specific git commit (rebase)
 git-self-review:       do self review of git commits
+git-compile-check:     check compile for commit range
 init-dev:              init dev environment for host
 kernel-backtrace:      dump backtrace for kernel function
 kernel-boot:           choose which version of kernel to boot in host
@@ -58,6 +59,39 @@ err ()
 {
     echo "ERROR: $@"
     exit 1
+}
+
+COLOR_RED='\033[0;31m'
+COLOR_GREEN='\033[0;32m'
+COLOR_YELLOW='\033[0;33m'
+COLOR_NC='\033[0m' # No Color
+
+echo_color()
+{
+    local color="$1"
+    shift 1
+    local prefix=""
+
+    case $color in
+        red|bad) prefix="$COLOR_RED" ;;
+        green|good) prefix="$COLOR_GREEN" ;;
+        yellow|warn) prefix="$COLOR_YELLOW" ;;
+        *) echo "PANIC"; exit 1 ;;
+    esac
+
+    echo -en "$prefix"
+    echo -n $@
+    echo -e "$COLOR_NC"
+}
+
+read_yes()
+{
+    local answer
+    read answer
+    case $answer in
+        yes|y) return 0 ;;
+        *) return 1;;
+    esac
 }
 
 wait_until_file_exists ()
@@ -1279,6 +1313,91 @@ do_kernel_grep_function()
     grep -E --color $1 $__available_filter_functions
 }
 
+git_rev_list ()
+{
+    git rev-list --reverse ${1}
+}
+
+default_compile_command="make -j8"
+default_compile_log="qtool-compile.log"
+
+do_git_compile_check()
+{
+    local commit_start="$1"
+    shift 1
+    local cur_branch=""
+    local count=""
+    local max=""
+    local commit_list=""
+
+    if [[ -z "$commit_start" ]]; then
+        cat <<EOF
+usage: $prog_name git-compile-check <commit> [commands...]
+
+Do compile check for each commit in range <commit>..HEAD
+
+The compile check is done using the following:
+
+1. check out specific commit (from old to new) in order
+2. run the command provided (default: "$default_compile_command")
+3. check return code for command...
+  3.1. command return zero...
+    3.1.1. if current commit is HEAD, goto 4.
+    3.2.2. if current commit is not HEAD, goto 1.
+  3.2. command return non-zero, check fail
+4. check success
+
+Last time compilation log will be in: $default_compile_log
+EOF
+        return 1
+    fi
+
+    if [[ -z "$@" ]]; then
+        compile_cmd="$default_compile_command"
+    else
+        compile_cmd="$@"
+    fi
+
+    cur_branch=$(git symbolic-ref --short HEAD)
+    if [[ $? != 0 || -z "$cur_branch" ]]; then
+        echo "Please make sure HEAD is at the branch to test"
+        return 1
+    fi
+
+    commit_list=$(git_rev_list $commit_start..HEAD)
+
+    count=1
+    max=$(echo "$commit_list" | wc -l)
+    echo -n "Start compile check for range "
+    echo -n "$commit_start..$cur_branch ($max commits)? "
+    if ! read_yes; then
+        echo "Cancelling compilation check"
+        return 1
+    fi
+    for commit in $commit_list; do
+        local info=$(git log --oneline $commit -1 | cut -c-60)
+        echo_color yellow "[${count}/${max}] check $info"
+        git checkout $commit &> /dev/null
+        if [[ $? != 0 ]]; then
+            echo_color red "Failed to commit $commit."
+            git checkout $cur_branch
+            return 1
+        fi
+        $compile_cmd &> $default_compile_log
+        if [[ $? == 0 ]]; then
+            echo_color green "Commit $commit check passed."
+        else
+            echo_color red "Commit $commit check failed."
+            git checkout $cur_branch
+            return 1
+        fi
+        count=$(( $count + 1 ))
+    done
+
+    echo_color green "Compilation check successful"
+    git checkout $cur_branch
+}
+
 cmd=$1
 shift 1
 
@@ -1299,6 +1418,7 @@ case $cmd in
     git-commit-get-cc) do_git_commit_get_cc $@ ;;
     git-self-review) do_git_self_review $@ ;;
     git-fix-commit) do_git_commit_fix $@ ;;
+    git-compile-check) do_git_compile_check $@ ;;
     fake-editor) do_fake_editor $@ ;;
     prepare-send) do_prepare_send $@ ;;
     vpnc-dial-in) do_vpnc_dial_in $@ ;;
