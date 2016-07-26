@@ -780,7 +780,7 @@ EOF
     fi
 
     echo "Sending..."
-    git send-email $param
+    git send-email --suppress-cc=all $param
     echo "Done."
 }
 
