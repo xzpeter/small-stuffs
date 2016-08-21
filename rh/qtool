@@ -31,6 +31,7 @@ git-fix-commit:        fix specific git commit (rebase)
 git-self-review:       do self review of git commits
 git-compile-check:     check compile for commit range
 init-dev:              init dev environment for host
+install-dev:           install packages for dev
 kernel-backtrace:      dump backtrace for kernel function
 kernel-boot:           choose which version of kernel to boot in host
 kernel-grep-function:  find kernel function with key
@@ -728,6 +729,7 @@ EOF
     for mlist in ${maillist}; do
         case $mlist in
             qemu*) tolist="$tolist qemu-devel@nongnu.org" ;;
+            rhvirt*) tolist="$tolist rhvirt-patches@redhat.com" ;;
             libvir*) tolist="$tolist libvir-list@redhat.com" ;;
             lkml|kernel)
                 tolist="$tolist linux-kernel@vger.kernel.org" ;;
@@ -1398,12 +1400,42 @@ EOF
     git checkout $cur_branch
 }
 
+get_dnf()
+{
+    if which dnf &> /dev/null; then
+        echo dnf
+    elif which yum &> /dev/null; then
+        echo yum
+    else
+        echo "Failed to find yum or dnf" >2
+        exit 1
+    fi
+}
+
+do_install_dev ()
+{
+    local dnf=$(get_dnf)
+    local pkgs="gcc automake autoconf git vim wget telnet"
+
+    echo "Going to install following packages: "
+    echo
+    echo "$pkgs"
+    echo
+    echo -n "Continue? (y/n)"
+    if ! read_yes; then
+        return 0
+    fi
+
+    $dnf install $pkgs
+}
+
 cmd=$1
 shift 1
 
 case $cmd in
     qemu-build) do_qemu_build $@ ;;
     init-dev) do_init_dev $1 ;;
+    install-dev) do_install_dev $@ ;;
     create-initrd-root) do_create_initrd_root $@ ;;
     build-initrd) do_build_initrd $1 ;;
     kernel-run) do_kernel_run $@ ;;
