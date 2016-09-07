@@ -114,15 +114,20 @@ do_qemu_build ()
     local current=$(pwd)
     local pdir=$(dirname $current)
     local top=$(basename $current)
-    local args="$@"
+    local args="$1"
+    local target_list="x86_64-softmmu,aarch64-softmmu,ppc64-softmmu"
 
     if [[ "$args" == "--help" ]]; then
         cat <<EOF
-usage: $prog_name qemu-build [extra-config-params]
+usage: $prog_name qemu-build [arch_list]
 
 Configure/Build QEMU under $QEMU_REPO/bin/ directory.
 EOF
         return 1
+    fi
+
+    if [[ -n "$args" ]]; then
+        target_list="$args"
     fi
 
     if [[ ! "$top" == bin* ]]; then
@@ -130,9 +135,9 @@ EOF
         return 1
     fi
 
-    ../configure --target-list=x86_64-softmmu,aarch64-softmmu \
+    ../configure --target-list=$target_list \
                  --enable-debug --enable-spice \
-                 --enable-usb-redir $args
+                 --enable-usb-redir
 
     if [[ $? != 0 ]]; then
         echo "configure failed, stop here"
