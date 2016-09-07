@@ -127,7 +127,15 @@ EOF
     fi
 
     if [[ -n "$args" ]]; then
-        target_list="$args"
+        if [[ "$args" == "all" ]]; then
+            target_list=""
+        else
+            target_list="$args"
+        fi
+    fi
+
+    if [[ -n "$target_list" ]]; then
+        target_list="--target-list=$target_list"
     fi
 
     if [[ ! "$top" == bin* ]]; then
@@ -135,7 +143,7 @@ EOF
         return 1
     fi
 
-    ../configure --target-list=$target_list \
+    ../configure $target_list \
                  --enable-debug --enable-spice \
                  --enable-usb-redir
 
