@@ -744,6 +744,7 @@ EOF
             qemu*) tolist="$tolist qemu-devel@nongnu.org" ;;
             rhvirt*) tolist="$tolist rhvirt-patches@redhat.com" ;;
             libvir*) tolist="$tolist libvir-list@redhat.com" ;;
+            kvm) tolist="$tolist kvm@vger.kernel.org" ;;
             lkml|kernel)
                 tolist="$tolist linux-kernel@vger.kernel.org" ;;
             # this is specific email address
