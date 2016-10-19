@@ -1,0 +1,88 @@
+#!/usr/bin/env python
+
+import re
+import sys
+
+PROG_NAME = sys.argv[0]
+ORG_DIR = "/root/org/work.org"
+
+def cmd_generate_status_report(args):
+    log_lines = open(ORG_DIR).read().split("\n")
+    done_fmt = re.compile(r'\*+ DONE \[#[ABC]\] ([^:]+): (.*)$')
+    done_list = filter(lambda x: done_fmt.match(x), log_lines)
+    done_list = map(lambda x: done_fmt.match(x).groups(), done_list)
+
+    upstream_patch_list = []
+    upstream_review_list = []
+    upstream_keys = ["qemu", "kvm-unit-test", "kvm-unit-tests",
+                     "kvm", "linux"]
+    downstream_list = []
+    misc_list = []
+
+    for item in done_list:
+        key = item[0].lower()
+        title = item[1]
+        line = "%s: %s" % (key, title)
+
+        if key not in upstream_keys or \
+           ("PATCH" not in title and "RFC" not in title):
+            misc_list.append(line)
+            continue
+
+        if re.match("review ", title):
+            # remove "review " tag
+            upstream_review_list.append(line.replace(": review [", ": ["))
+        else:
+            upstream_patch_list.append(line)
+
+    print "Upstream: "
+    print
+    for item in upstream_patch_list:
+        print "* %s" % item
+        print
+
+    if upstream_review_list:
+        print "* Reviewed patches:"
+        print
+    for item in upstream_review_list:
+        print "  %s" % item
+    if upstream_review_list:
+        print
+
+    print "Downstream:"
+    print
+
+    # still empty
+
+    print "Misc:"
+    print
+    for item in misc_list:
+        print "* %s" % item
+        print
+
+CMD_HANDLERS = {
+    "status-report": {
+        "desc": "Generate status report",
+        "handler": cmd_generate_status_report,
+    },
+}
+
+def print_help():
+    print "usage: %s <cmd>" % PROG_NAME
+    print
+    print "Command list:"
+    print
+    for cmd in CMD_HANDLERS:
+        print "%s - %s" % (cmd, CMD_HANDLERS[cmd]["desc"])
+
+if len(sys.argv) <= 1:
+    print_help()
+    exit(1)
+
+cmd = sys.argv[1]
+
+if cmd not in CMD_HANDLERS:
+    print "Command %s unknown" % cmd
+    exit(1)
+
+CMD_HANDLERS[cmd]["handler"](sys.argv[1:])

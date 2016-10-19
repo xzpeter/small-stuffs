@@ -42,6 +42,7 @@ prepare-send:          prepare one script to send patches
 qemu-build:            build QEMU repository.
 send-patch:            send patches using git-send-email
 ssh-host:              SSH to host, with line buffering
+status-report:         generate status report
 vpnc-dial-in:          dial in VPN
 
 EOF
@@ -1429,7 +1430,9 @@ get_dnf()
 do_install_dev ()
 {
     local dnf=$(get_dnf)
-    local pkgs="gcc automake autoconf git vim wget telnet"
+    local pkgs="gcc automake autoconf git vim wget telnet zlib zlib-devel"
+    pkgs="$pkgs glib2 glib2-devel pixman pixman-devel spice-server"
+    pkgs="$pkgs spice-server-devel usbredir-devel libguestfs*"
 
     echo "Going to install following packages: "
     echo
@@ -1440,7 +1443,13 @@ do_install_dev ()
         return 0
     fi
 
-    $dnf install $pkgs
+    $dnf install -y $pkgs
+}
+
+go_python ()
+{
+    pybin="$(dirname $(realpath $prog_name))/pyqtool"
+    $pybin $@
 }
 
 cmd=$1
@@ -1470,6 +1479,7 @@ case $cmd in
     vpnc-dial-in) do_vpnc_dial_in $@ ;;
     kernel-backtrace) do_backtrace $@ ;;
     kernel-grep-function) do_kernel_grep_function $@ ;;
+    status-report) go_python $cmd $@ ;;
     *) usage ;;
 esac
 
