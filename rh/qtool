@@ -713,6 +713,22 @@ do_auto_bisect ()
     return $?
 }
 
+# Tries to translate a nickname into email address
+nick_to_email()
+{
+    local nick="$1"
+    local alias_book="/root/.mutt/aliases"
+    local info=""
+
+    info=$(grep -w $nick $alias_book 2>/dev/null | head -1)
+    if [[ -z "$info" ]]; then
+        return
+    fi
+    info=${info##*<}
+    info=${info%%>*}
+    echo $info
+}
+
 do_send_patch ()
 {
     local maillist="$1"
@@ -773,6 +789,13 @@ EOF
     echo
     if [[ -n "$cclist" ]]; then
         for item in $cclist; do
+            if [[ "$item" != "*@*" ]]; then
+                # assume this is a nick
+                local email=$(nick_to_email $item)
+                if [[ -n "$email" ]]; then
+                    item="$email"
+                fi
+            fi
             echo "  $item"
             param="$param --cc=$item"
         done
