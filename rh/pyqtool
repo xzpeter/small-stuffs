@@ -22,9 +22,10 @@ def file_write(path, data):
 
 def cmd_generate_status_report(args):
     log_lines = open(ORG_DIR).read().split("\n")
-    done_fmt = re.compile(r'\*+ DONE \[#[ABC]\] ([^:]+): (.*)$')
+    done_fmt = re.compile(r'\*+ DONE \[#[ABC]\] (.*)$')
+    key_fmt = re.compile(r'^([^:]): (.*)$')
     done_list = filter(lambda x: done_fmt.match(x), log_lines)
-    done_list = map(lambda x: done_fmt.match(x).groups(), done_list)
+    done_list = map(lambda x: done_fmt.match(x).groups()[0], done_list)
 
     upstream_patch_list = []
     upstream_review_list = []
@@ -34,20 +35,25 @@ def cmd_generate_status_report(args):
     misc_list = []
 
     for item in done_list:
-        key = item[0].lower()
-        title = item[1]
-        line = "%s: %s" % (key, title)
+        res = key_fmt.match(item)
+        if res:
+            key = res.groups()[0].lower()
+            title = res.groups()[1]
+        else:
+            # this is a raw item, not for patches
+            key = ""
+            title = item
 
         if key not in upstream_keys or \
            ("PATCH" not in title and "RFC" not in title):
-            misc_list.append(line)
+            misc_list.append(item)
             continue
 
-        if re.match("review ", title):
+        if key and re.match("review ", title):
             # remove "review " tag
-            upstream_review_list.append(line.replace(": review [", ": ["))
+            upstream_review_list.append(item.replace(": review [", ": ["))
         else:
-            upstream_patch_list.append(line)
+            upstream_patch_list.append(item)
 
     print "Upstream: "
     print
