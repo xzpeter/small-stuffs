@@ -1,10 +1,24 @@
 #!/usr/bin/env python
 
 import re
+import os
 import sys
+import json
+import subprocess
 
 PROG_NAME = sys.argv[0]
 ORG_DIR = "/root/org/work.org"
+
+def shell(cmd):
+    return subprocess.Popen(cmd, shell=True, stderr=subprocess.PIPE,
+                            stdout=subprocess.PIPE).stdout.read()
+
+def file_write(path, data):
+    try:
+        # print "Write data '%s' to file '%s'" % (data, path)
+        open(path, "w").write(data)
+    except:
+        print "Got exception in file_write"
 
 def cmd_generate_status_report(args):
     log_lines = open(ORG_DIR).read().split("\n")
@@ -60,10 +74,216 @@ def cmd_generate_status_report(args):
         print "* %s" % item
         print
 
+    return 0
+
+PCI_CMD_HELP = """
+usage: %s <isolate|recover|status> [bb:dd.ff ...]
+
+Supported PCI subcommands:
+
+isolate: isolate a PCI device using vfio-pci from system
+recover: recover a PCI device by using its generic PCI driver
+status:  list current status of PCI devices
+""" % PROG_NAME
+
+pci_sysfs_root = "/sys/bus/pci/devices"
+pci_tree_cache = None
+pci_driver_list = [
+    # supported devices with its kernel modules
+    {
+        "name": "Intel USB xHCI Controller",
+        "vendor": "0x8086",
+        "device": "0x8c31",
+        "module": "xhci_hcd",
+    },
+    {
+        "name": "Intel Ethernet I217-LM",
+        "vendor": "0x8086",
+        "device": "0x153a",
+        "module": "e1000e",
+    }
+]
+
+def pci_cmd_help():
+    print PCI_CMD_HELP
+    return 1
+
+def pci_is_bdf(bdf):
+    return re.match("^[0-9a-fA-F]{2}:[0-9a-fA-F]{2}.[0-9a-fA-F]$",
+                    bdf)
+
+def pci_module_get(vendor, device):
+    for driver in pci_driver_list:
+        if driver["vendor"] == vendor and driver["device"] == device:
+            return driver
+    return None
+
+def pci_tree_parse():
+    results = []
+    dev_list = os.listdir(pci_sysfs_root)
+    for dev in dev_list:
+        dev_path = pci_sysfs_root + "/" + dev
+        vendor = open(dev_path + "/vendor").read().strip()
+        device = open(dev_path + "/device").read().strip()
+        module = pci_module_get(vendor, device)
+        if not module:
+            # we don't parse unsupported devices
+            continue
+        driver_path = dev_path + "/driver"
+        if os.access(driver_path, os.F_OK):
+            driver = os.readlink(driver_path)
+            driver = os.path.basename(driver)
+        else:
+            driver = ""
+        results.append({
+            "addr": dev[5:],
+            "driver": driver,
+            "info": module,
+        })
+    return results
+
+def pci_tree_get():
+    global pci_tree_cache
+    if not pci_tree_cache:
+        pci_tree_cache = pci_tree_parse()
+    return pci_tree_cache
+
+def pci_device_get(addr):
+    pci_tree = pci_tree_get()
+    for dev in pci_tree:
+        if addr == dev["addr"]:
+            return dev
+
+def cmd_pci_status(args=[]):
+    dev_list = pci_tree_get()
+    vfio_list = []
+    other_list = []
+
+    for dev in dev_list:
+        if dev["driver"] == "vfio-pci":
+            vfio_list.append(dev)
+        else:
+            other_list.append(dev)
+
+    print
+    print "PCI devices that binded to vfio-pci:"
+    print
+    for dev in vfio_list:
+        print "  %s %s" % (dev["addr"], dev["info"]["name"])
+    if not vfio_list:
+        print "  (None)"
+    print
+
+    print "PCI devices that binded to other driver:"
+    print
+    for dev in other_list:
+        printed = True
+        print "  %s %s (%s)" % (dev["addr"], dev["info"]["name"],
+                                dev["driver"])
+    if not other_list:
+        print "  (None)"
+    print
+
+def pci_device_exists(device):
+    dev_tree = pci_tree_get()
+    for dev in dev_tree:
+        if device == dev["addr"]:
+            return True
+    return False
+
+def pci_device_list_check(devices):
+    # check all devices are valid
+    if not devices:
+        print "Need to provide device (or device list). Please choose from:"
+        cmd_pci_status()
+        return 1
+    for dev in devices:
+        if not pci_is_bdf(dev):
+            print "'%s' format wrong (should be BB:DD.FF)" % dev
+            return 1
+        if not pci_device_exists(dev):
+            print "Device '%s' does not exist" % dev
+            return 1
+
+def pci_driver_bind(driver, addr):
+    print "Binding device '%s' to driver '%s'" % (addr, driver)
+    dev = pci_device_get(addr)
+    if driver == "vfio-pci":
+        path_new = "/sys/bus/pci/drivers/%s/new_id" % driver
+        data = "%s %s" % (dev["info"]["vendor"][2:],
+                        dev["info"]["device"][2:])
+        file_write(path_new, data)
+    else:
+        path_bind = "/sys/bus/pci/drivers/%s/bind" % driver
+        file_write(path_bind, "0000:" + addr)
+
+def pci_driver_unbind(driver, addr):
+    print "Unbinding device '%s' from driver '%s'" % (addr, driver)
+    path = "/sys/bus/pci/drivers/" + driver + "/unbind"
+    file_write(path, "0000:" + addr)
+
+def pci_dev_isolate(dev, to_isolate):
+    "Either isolate/recover a PCI device"
+    if to_isolate:
+        # bind it to vfio-pci driver
+        if dev["driver"] == "vfio-pci":
+            print "Device '%s' already binded to vfio-pci, skip" \
+                % dev["addr"]
+            return
+        if dev["driver"]:
+            # there is existing driver, unbind
+            pci_driver_unbind(dev["driver"], dev["addr"])
+        pci_driver_bind("vfio-pci", dev["addr"])
+    else:
+        # bind it to generic driver
+        module = dev["info"]["module"]
+        if dev["driver"] == module:
+            print "Device '%s' already binded to driver '%s', skip" \
+                % (dev["addr"], module)
+            return
+        if dev["driver"]:
+            pci_driver_unbind(dev["driver"], dev["addr"])
+        pci_driver_bind(module, dev["addr"])
+
+def cmd_pci_isolate(devices):
+    if pci_device_list_check(devices):
+        return 1
+    dev_tree = pci_tree_get()
+    for dev in devices:
+        pci_dev_isolate(pci_device_get(dev), True)
+
+def cmd_pci_recover(devices):
+    if pci_device_list_check(devices):
+        return 1
+    dev_tree = pci_tree_get()
+    for dev in devices:
+        pci_dev_isolate(pci_device_get(dev), False)
+
+def cmd_pci_routine(args):
+    if len(args) <= 1:
+        return pci_cmd_help()
+
+    pci_cmd_list = {
+        "isolate": cmd_pci_isolate,
+        "recover": cmd_pci_recover,
+        "status": cmd_pci_status,
+    }
+
+    subcmd = args[1]
+    if subcmd not in pci_cmd_list:
+        print "Unknown PCI subcommand: %s" % subcmd
+        return pci_cmd_help()
+
+    return pci_cmd_list[subcmd](args[2:])
+
 CMD_HANDLERS = {
     "status-report": {
         "desc": "Generate status report",
         "handler": cmd_generate_status_report,
+    },
+    "pci": {
+        "desc": "PCI related helper operations",
+        "handler": cmd_pci_routine,
     },
 }
 
@@ -85,4 +305,4 @@ if cmd not in CMD_HANDLERS:
     print "Command %s unknown" % cmd
     exit(1)
 
-CMD_HANDLERS[cmd]["handler"](sys.argv[1:])
+exit(CMD_HANDLERS[cmd]["handler"](sys.argv[1:]))

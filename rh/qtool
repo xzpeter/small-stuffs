@@ -39,6 +39,7 @@ kernel-install:        install the kernel (to specific VM)
 kernel-quit:           stop the running kernel...
 kernel-run:            run specific kernel using QEMU
 prepare-send:          prepare one script to send patches
+pci:                   some PCI related operations
 qemu-build:            build QEMU repository.
 send-patch:            send patches using git-send-email
 ssh-host:              SSH to host, with line buffering
@@ -1499,6 +1500,7 @@ case $cmd in
     git-compile-check) do_git_compile_check $@ ;;
     fake-editor) do_fake_editor $@ ;;
     prepare-send) do_prepare_send $@ ;;
+    pci) go_python $cmd $@ ;;
     vpnc-dial-in) do_vpnc_dial_in $@ ;;
     kernel-backtrace) do_backtrace $@ ;;
     kernel-grep-function) do_kernel_grep_function $@ ;;
