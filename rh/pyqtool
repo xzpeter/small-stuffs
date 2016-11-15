@@ -23,7 +23,7 @@ def file_write(path, data):
 def cmd_generate_status_report(args):
     log_lines = open(ORG_DIR).read().split("\n")
     done_fmt = re.compile(r'\*+ DONE \[#[ABC]\] (.*)$')
-    key_fmt = re.compile(r'^([^:]): (.*)$')
+    key_fmt = re.compile(r'^([^:]+): (.*)$')
     done_list = filter(lambda x: done_fmt.match(x), log_lines)
     done_list = map(lambda x: done_fmt.match(x).groups()[0], done_list)
 
