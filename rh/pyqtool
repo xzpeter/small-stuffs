@@ -85,11 +85,12 @@ def cmd_generate_status_report(args):
     return 0
 
 PCI_CMD_HELP = """
-usage: %s <isolate|recover|status> [bb:dd.ff ...]
+usage: %s <isolate|stub|recover|status> [bb:dd.ff ...]
 
 Supported PCI subcommands:
 
 isolate: isolate a PCI device using vfio-pci from system
+stub:    same as isolate, using pci-stub driver
 recover: recover a PCI device by using its generic PCI driver
 status:  list current status of PCI devices
 """ % PROG_NAME
@@ -171,11 +172,14 @@ def pci_device_get(addr):
 def cmd_pci_status(args=[]):
     dev_list = pci_tree_get()
     vfio_list = []
+    stub_list = []
     other_list = []
 
     for dev in dev_list:
         if dev["driver"] == "vfio-pci":
             vfio_list.append(dev)
+        elif dev["driver"] == "pci-stub":
+            stub_list.append(dev)
         else:
             other_list.append(dev)
 
@@ -185,6 +189,15 @@ def cmd_pci_status(args=[]):
     for dev in vfio_list:
         print "  %s %s" % (dev["addr"], dev["info"]["name"])
     if not vfio_list:
+        print "  (None)"
+    print
+
+    print
+    print "PCI devices that binded to pci-stub:"
+    print
+    for dev in stub_list:
+        print "  %s %s" % (dev["addr"], dev["info"]["name"])
+    if not stub_list:
         print "  (None)"
     print
 
@@ -222,7 +235,7 @@ def pci_device_list_check(devices):
 def pci_driver_bind(driver, addr):
     print "Binding device '%s' to driver '%s'" % (addr, driver)
     dev = pci_device_get(addr)
-    if driver == "vfio-pci":
+    if driver in ("vfio-pci", "pci-stub"):
         path_new = "/sys/bus/pci/drivers/%s/new_id" % driver
         data = "%s %s" % (dev["info"]["vendor"][2:],
                         dev["info"]["device"][2:])
@@ -239,19 +252,23 @@ def pci_driver_unbind(driver, addr):
 def vfio_module_probe():
     shell("modprobe vfio-pci")
 
-def pci_dev_isolate(dev, to_isolate):
+def pci_dev_isolate(dev, to_isolate, target="vfio-pci"):
     "Either isolate/recover a PCI device"
+    if target not in ("vfio-pci", "pci-stub"):
+        print "target '%s' incorrect" % target
+        exit(1)
     if to_isolate:
-        # bind it to vfio-pci driver
-        vfio_module_probe()
-        if dev["driver"] == "vfio-pci":
-            print "Device '%s' already binded to vfio-pci, skip" \
-                % dev["addr"]
+        # bind it to vfio-pci/pci-stub driver
+        if target == "vfio-pci":
+            vfio_module_probe()
+        if dev["driver"] == target:
+            print "Device '%s' already binded to %s, skip" \
+                % (dev["addr"], target)
             return
         if dev["driver"]:
             # there is existing driver, unbind
             pci_driver_unbind(dev["driver"], dev["addr"])
-        pci_driver_bind("vfio-pci", dev["addr"])
+        pci_driver_bind(target, dev["addr"])
     else:
         # bind it to generic driver
         module = dev["info"]["module"]
@@ -263,12 +280,19 @@ def pci_dev_isolate(dev, to_isolate):
             pci_driver_unbind(dev["driver"], dev["addr"])
         pci_driver_bind(module, dev["addr"])
 
+def cmd_pci_stub(devices):
+    if pci_device_list_check(devices):
+        return 1
+    dev_tree = pci_tree_get()
+    for dev in devices:
+        pci_dev_isolate(pci_device_get(dev), True, "pci-stub")
+
 def cmd_pci_isolate(devices):
     if pci_device_list_check(devices):
         return 1
     dev_tree = pci_tree_get()
     for dev in devices:
-        pci_dev_isolate(pci_device_get(dev), True)
+        pci_dev_isolate(pci_device_get(dev), True, "vfio-pci")
 
 def cmd_pci_recover(devices):
     if pci_device_list_check(devices):
@@ -285,6 +309,7 @@ def cmd_pci_routine(args):
         "isolate": cmd_pci_isolate,
         "recover": cmd_pci_recover,
         "status": cmd_pci_status,
+        "stub": cmd_pci_stub,
     }
 
     subcmd = args[1]
