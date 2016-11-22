@@ -10,8 +10,10 @@ PROG_NAME = sys.argv[0]
 ORG_DIR = "/root/org/work.org"
 
 def shell(cmd):
-    return subprocess.Popen(cmd, shell=True, stderr=subprocess.PIPE,
-                            stdout=subprocess.PIPE).stdout.read()
+    proc = subprocess.Popen(cmd, shell=True, stderr=subprocess.PIPE,
+                            stdout=subprocess.PIPE)
+    out, err = proc.communicate()
+    return proc.returncode, out, err
 
 def file_write(path, data):
     try:
@@ -107,7 +109,13 @@ pci_driver_list = [
         "vendor": "0x8086",
         "device": "0x153a",
         "module": "e1000e",
-    }
+    },
+    {
+        "name": "Intel Wireless 7260",
+        "vendor": "0x8086",
+        "device": "0x08b2",
+        "module": "iwlwifi",
+    },
 ]
 
 def pci_cmd_help():
@@ -228,10 +236,14 @@ def pci_driver_unbind(driver, addr):
     path = "/sys/bus/pci/drivers/" + driver + "/unbind"
     file_write(path, "0000:" + addr)
 
+def vfio_module_probe():
+    shell("modprobe vfio-pci")
+
 def pci_dev_isolate(dev, to_isolate):
     "Either isolate/recover a PCI device"
     if to_isolate:
         # bind it to vfio-pci driver
+        vfio_module_probe()
         if dev["driver"] == "vfio-pci":
             print "Device '%s' already binded to vfio-pci, skip" \
                 % dev["addr"]
