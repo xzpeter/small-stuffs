@@ -169,19 +169,30 @@ def pci_device_get(addr):
         if addr == dev["addr"]:
             return dev
 
-def cmd_pci_status(args=[]):
-    dev_list = pci_tree_get()
-    vfio_list = []
-    stub_list = []
-    other_list = []
-
-    for dev in dev_list:
-        if dev["driver"] == "vfio-pci":
-            vfio_list.append(dev)
-        elif dev["driver"] == "pci-stub":
-            stub_list.append(dev)
+def pci_device_list_get_by_driver(whitelist=[], blacklist=[]):
+    """Get a list of devices, depending on the specified `whitelist' or
+    `blacklist'. Here `whitelist' has higher priority."""
+    pci_tree = pci_tree_get()
+    result = []
+    for dev in pci_tree:
+        if dev["driver"] in whitelist:
+            # white list first
+            result.append(dev)
+        elif dev["driver"] in blacklist:
+            continue
         else:
-            other_list.append(dev)
+            # not in white list, nor in black list, then:
+            # 1. if whitelist is empty, we choose it by default
+            # 2. if not, we disgard it by default
+            if not whitelist:
+                result.append(dev)
+    return result
+
+def cmd_pci_status(args=[]):
+    vfio_list = pci_device_list_get_by_driver(whitelist=["vfio-pci"])
+    stub_list = pci_device_list_get_by_driver(whitelist=["pci-stub"])
+    other_list = pci_device_list_get_by_driver(blacklist=["vfio-pci",
+                                                          "pci-stub"])
 
     print
     print "PCI devices that binded to vfio-pci:"
