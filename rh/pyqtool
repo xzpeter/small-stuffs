@@ -92,6 +92,7 @@ Supported PCI subcommands:
 isolate: isolate a PCI device using vfio-pci from system
 stub:    same as isolate, using pci-stub driver
 recover: recover a PCI device by using its generic PCI driver
+         (if not specifying any device, will recover all devices)
 status:  list current status of PCI devices
 """ % PROG_NAME
 
@@ -116,6 +117,12 @@ pci_driver_list = [
         "vendor": "0x8086",
         "device": "0x08b2",
         "module": "iwlwifi",
+    },
+    {
+        "name": "O2 Micro SD Host Controller",
+        "vendor": "0x1217",
+        "device": "0x8520",
+        "module": "sdhci-pci",
     },
 ]
 
@@ -306,6 +313,16 @@ def cmd_pci_isolate(devices):
         pci_dev_isolate(pci_device_get(dev), True, "vfio-pci")
 
 def cmd_pci_recover(devices):
+    if not devices:
+        devices = pci_device_list_get_by_driver(whitelist=["vfio-pci",
+                                                           "pci-stub"])
+        devices = map(lambda x: x["addr"], devices)
+        if not devices:
+            print "No isolated/stubbed device to recover"
+            return 1
+        print "Recovering all isolated/stubbed devices:"
+        for dev in devices:
+            print "  %s" % dev
     if pci_device_list_check(devices):
         return 1
     dev_tree = pci_tree_get()
