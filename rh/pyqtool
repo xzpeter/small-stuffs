@@ -124,6 +124,12 @@ pci_driver_list = [
         "device": "0x8520",
         "module": "sdhci-pci",
     },
+    {
+        "name": "Intel E1000 Network Device",
+        "vendor": "0x8086",
+        "device": "0x100e",
+        "module": "e1000",
+    },
 ]
 
 def pci_cmd_help():
