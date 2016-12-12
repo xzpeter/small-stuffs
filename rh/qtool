@@ -1234,17 +1234,24 @@ EOF
     echo "Script generated at $script."
 }
 
+vpnc_trigger_file="/root/.private/.vpnc-trigger"
+
 do_vpnc_dial_in()
 {
-    vpnc_cmd="vpnc redhat"
+    if [[ -f $vpnc_trigger_file ]]; then
+        echo_color green "Detected VPNC trigger, using it"
+        bash $vpnc_trigger_file
+    else
+        local vpnc_cmd="vpnc "
 
-    pgrep -f "$vpnc_cmd" | while read pid; do
-        echo "Detected existing vpnc process, killing..."
-        kill $pid
-        sleep 1
-    done
+        pgrep -f "vpnc" | while read pid; do
+            echo "Detected existing vpnc process, killing..."
+            kill $pid
+            sleep 1
+        done
+        $vpnc_cmd
+    fi
 
-    $vpnc_cmd
     if [[ $? != 0 ]]; then
         echo "VPN connection failed."
         return 1
