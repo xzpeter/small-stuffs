@@ -38,6 +38,7 @@ kernel-grep-function:  find kernel function with key
 kernel-install:        install the kernel (to specific VM)
 kernel-quit:           stop the running kernel...
 kernel-run:            run specific kernel using QEMU
+kernel-cleanup:        remove kernel of specific version
 prepare-send:          prepare one script to send patches
 pci:                   some PCI related operations
 qemu-build:            build QEMU repository.
@@ -95,6 +96,17 @@ read_yes()
         yes|y) return 0 ;;
         *) return 1;;
     esac
+}
+
+is_number()
+{
+    [[ "$1" =~ ^[0-9]+$ ]]
+}
+
+is_quit()
+{
+    [[ "$1" == "quit" || "$1" == "q" || \
+           "$1" == "exit" || "$1" == "" ]]
 }
 
 wait_until_file_exists ()
@@ -1477,6 +1489,87 @@ do_install_dev ()
     $dnf install -y $pkgs
 }
 
+kernel_get_versions()
+{
+    ls /boot/vmlinuz-* | grep -vE "\.fc|rescue" | sed 's/.*vmlinuz-//'
+}
+
+kernel_get_files()
+{
+    local list="/boot/initramfs-KERNEL.img /boot/vmlinuz-KERNEL"
+    list="$list /boot/System.map-KERNEL /lib/modules/KERNEL"
+    echo ${list//KERNEL/$1}
+}
+
+kernel_delete_one()
+{
+    local files=$(kernel_get_files $1)
+    local file
+
+    echo_color yellow "Will remove following files:"
+    for file in $files; do
+        echo "  $file"
+    done
+    echo -n "Continue (y/n)? "
+    if ! read_yes; then
+        echo "Aborting."
+        exit 0
+    fi
+
+    for file in $files; do
+        rm -rf $file
+    done
+}
+
+do_kernel_cleanup()
+{
+    local kernel
+    local kernel_list
+    local count
+    local answer
+
+    while :; do
+        local kernels=$(kernel_get_versions)
+
+        if [[ -z "$kernels" ]]; then
+            echo "No custom kernel exists, will quit."
+            return
+        fi
+
+        count=0
+        echo_color yellow "Existing kernels:"
+        for kernel in $kernels; do
+            kernel_list[count]=$kernel
+            echo "  ($count) $kernel"
+            count=$(( $count + 1 ))
+        done
+        echo -n "Which one to remove (enter to quit): "
+        read answer
+        if is_quit $answer; then
+            return 0
+        fi
+        if ! is_number $answer; then
+            echo_color red "Illegal input '$answer'"
+            continue
+        fi
+        if [[ "$answer" -ge $count ]]; then
+            echo_color red "Please input in range (0-$(( $count - 1 )))"
+            continue
+        fi
+        kernel=${kernel_list[$answer]}
+        if ! kernel_delete_one $kernel; then
+            echo_color red "Failed to delete kernel $kernel"
+            return 1
+        else
+            if ! grub2-mkconfig -o /boot/grub2/grub.cfg &> /dev/null; then
+                echo "Failed update grub"
+                return 1
+            fi
+            echo_color green "Removed kernel $kernel successfully"
+        fi
+    done
+}
+
 go_python ()
 {
     pybin="$(dirname $(realpath $prog_name))/pyqtool"
@@ -1510,6 +1603,7 @@ case $cmd in
     pci) go_python $cmd $@ ;;
     vpnc-dial-in) do_vpnc_dial_in $@ ;;
     kernel-backtrace) do_backtrace $@ ;;
+    kernel-cleanup) do_kernel_cleanup $@ ;;
     kernel-grep-function) do_kernel_grep_function $@ ;;
     status-report) go_python $cmd $@ ;;
     *) usage ;;
