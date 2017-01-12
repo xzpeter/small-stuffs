@@ -22,6 +22,11 @@ def file_write(path, data):
     except:
         print "Got exception in file_write"
 
+def dump_if_empty(items):
+    if not items:
+        print "  None."
+        print
+
 def cmd_generate_status_report(args):
     log_lines = open(ORG_DIR).read().split("\n")
     done_fmt = re.compile(r'\*+ DONE \[#[ABC]\] (.*)$')
@@ -33,6 +38,7 @@ def cmd_generate_status_report(args):
     upstream_review_list = []
     upstream_keys = ["qemu", "kvm-unit-test", "kvm-unit-tests",
                      "kvm", "linux"]
+    downstream_keys = ["redhat", "rh"]
     downstream_list = []
     misc_list = []
 
@@ -45,6 +51,10 @@ def cmd_generate_status_report(args):
             # this is a raw item, not for patches
             key = ""
             title = item
+
+        if key in downstream_keys:
+            downstream_list.append(item)
+            continue
 
         if key not in upstream_keys or \
            ("PATCH" not in title and "RFC" not in title):
@@ -62,6 +72,7 @@ def cmd_generate_status_report(args):
     for item in upstream_patch_list:
         print "* %s" % item
         print
+    dump_if_empty(upstream_patch_list)
 
     if upstream_review_list:
         print "* Reviewed patches:"
@@ -70,17 +81,21 @@ def cmd_generate_status_report(args):
         print "  %s" % item
     if upstream_review_list:
         print
+    dump_if_empty(upstream_patch_list)
 
     print "Downstream:"
     print
-
-    # still empty
+    for item in downstream_list:
+        print "* %s" % item
+        print
+    dump_if_empty(upstream_patch_list)
 
     print "Misc:"
     print
     for item in misc_list:
         print "* %s" % item
         print
+    dump_if_empty(misc_list)
 
     return 0
 
