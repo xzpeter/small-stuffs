@@ -35,7 +35,7 @@ def cmd_generate_status_report(args):
     done_list = map(lambda x: done_fmt.match(x).groups()[0], done_list)
 
     upstream_patch_list = []
-    upstream_review_list = []
+    review_list = []
     upstream_keys = ["qemu", "kvm-unit-test", "kvm-unit-tests",
                      "kvm", "linux"]
     downstream_keys = ["redhat", "rh"]
@@ -56,6 +56,10 @@ def cmd_generate_status_report(args):
             downstream_list.append(item)
             continue
 
+        elif key == "review":
+            review_list.append(item.replace("review: ", ""))
+            continue
+
         if key not in upstream_keys or \
            ("PATCH" not in title and "RFC" not in title):
             misc_list.append(item)
@@ -63,7 +67,7 @@ def cmd_generate_status_report(args):
 
         if key and re.match("review ", title):
             # remove "review " tag
-            upstream_review_list.append(item.replace(": review [", ": ["))
+            review_list.append(item.replace(": review [", ": ["))
         else:
             upstream_patch_list.append(item)
 
@@ -74,21 +78,21 @@ def cmd_generate_status_report(args):
         print
     dump_if_empty(upstream_patch_list)
 
-    if upstream_review_list:
+    if review_list:
         print "* Reviewed patches:"
         print
-    for item in upstream_review_list:
+    for item in review_list:
         print "  %s" % item
-    if upstream_review_list:
+    if review_list:
         print
-    dump_if_empty(upstream_patch_list)
+    dump_if_empty(review_list)
 
     print "Downstream:"
     print
     for item in downstream_list:
         print "* %s" % item
         print
-    dump_if_empty(upstream_patch_list)
+    dump_if_empty(downstream_list)
 
     print "Misc:"
     print
@@ -145,6 +149,12 @@ pci_driver_list = [
         "device": "0x100e",
         "module": "e1000",
     },
+    {
+        "name": "Intel 8 Series/C220 Series Chip Audio",
+        "vendor": "0x8086",
+        "device": "0x8c20",
+        "module": "snd_hda_intel",
+    }
 ]
 
 def pci_cmd_help():
