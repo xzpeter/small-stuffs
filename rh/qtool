@@ -30,6 +30,7 @@ git-commit-get-cc:     list all CC list for specific commit
 git-fix-commit:        fix specific git commit (rebase)
 git-self-review:       do self review of git commits
 git-compile-check:     check compile for commit range
+git-tag-cleanup:       cleanup useless git tags created by git-publish
 init-dev:              init dev environment for host
 install-dev:           install packages for dev
 kernel-backtrace:      dump backtrace for kernel function
@@ -1570,6 +1571,39 @@ do_kernel_cleanup()
     done
 }
 
+do_git_tag_cleanup()
+{
+    local cur_branches=""
+    local tags=""
+
+    cur_branches=$(git branch | sed 's/^..//g')
+    if [[ $? != 0 ]]; then
+        echo "May not under a git directory. Quitting."
+        return 0
+    fi
+
+    cur_branches=$(echo $cur_branches | sed 's/ /|/g')
+    tags=$(git tag | grep "\-v[0-9]" | grep -vE "$cur_branches")
+
+    if [[ -z "$tags" ]]; then
+        echo "No useless tags found. Quitting."
+        return 0
+    fi
+
+    echo_color yellow "Found useless tags:"
+    echo "$tags" | sed 's/^/  /'
+    echo_color yellow "Are you sure you want to remove all above tags? "
+    echo -n "Answer (y|n): "
+    if read_yes; then
+        for tag in $tags; do
+            git tag -d $tag
+        done
+        echo_color green "Tags removed."
+    else
+        echo_color green "Quitted."
+    fi
+}
+
 go_python ()
 {
     pybin="$(dirname $(realpath $prog_name))/pyqtool"
@@ -1598,6 +1632,7 @@ case $cmd in
     git-self-review) do_git_self_review $@ ;;
     git-fix-commit) do_git_commit_fix $@ ;;
     git-compile-check) do_git_compile_check $@ ;;
+    git-tag-cleanup) do_git_tag_cleanup $@ ;;
     fake-editor) do_fake_editor $@ ;;
     prepare-send) do_prepare_send $@ ;;
     pci) go_python $cmd $@ ;;
