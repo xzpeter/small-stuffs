@@ -160,7 +160,7 @@ EOF
 
     ../configure $target_list \
                  --enable-debug --enable-spice \
-                 --enable-usb-redir
+                 --enable-usb-redir --enable-xen
 
     if [[ $? != 0 ]]; then
         echo "configure failed, stop here"
