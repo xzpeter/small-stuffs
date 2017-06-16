@@ -130,7 +130,7 @@ do_qemu_build ()
     local pdir=$(dirname $current)
     local top=$(basename $current)
     local args="$1"
-    local target_list="x86_64-softmmu,aarch64-softmmu,ppc64-softmmu,x86_64-linux-user"
+    local target_list="x86_64-softmmu,aarch64-softmmu,ppc64-softmmu,x86_64-linux-user,i386-softmmu"
 
     if [[ "$args" == "--help" ]]; then
         cat <<EOF
