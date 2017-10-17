@@ -43,6 +43,7 @@ kernel-cleanup:        remove kernel of specific version
 prepare-send:          prepare one script to send patches
 pci:                   some PCI related operations
 qemu-build:            build QEMU repository.
+qemu-docker-tests:     do proper docker tests for the tree
 send-patch:            send patches using git-send-email
 ssh-host:              SSH to host, with line buffering
 status-report:         generate status report
@@ -160,7 +161,7 @@ EOF
 
     ../configure $target_list \
                  --enable-debug --enable-spice \
-                 --enable-usb-redir --enable-xen
+                 --enable-usb-redir
 
     if [[ $? != 0 ]]; then
         echo "configure failed, stop here"
@@ -172,6 +173,37 @@ EOF
         echo "build failed... stop here"
         return 1
     fi
+}
+
+do_qemu_docker_tests()
+{
+    local entries=""
+
+    entries="docker-test-quick@centos7"
+    entries="$entries docker-test-mingw@fedora"
+    # entries="$entries docker-test-build@min-glib"
+    # entries="$entries docker-test-block@fedora"
+
+    for entry in $entries; do
+        echo "=================================="
+        echo "Testing with $entry"
+        echo "=================================="
+
+        time make SHOW_ENV=1 J=8 $entry
+
+        if [[ $? != 0 ]]; then
+            echo "=================================="
+            echo "Failed test with $entry"
+            echo "=================================="
+            return 1
+        else
+            echo "=================================="
+            echo "Succeeded test with $entry"
+            echo "=================================="
+        fi
+    done
+
+    return 0
 }
 
 do_init_dev ()
@@ -1615,6 +1647,7 @@ shift 1
 
 case $cmd in
     qemu-build) do_qemu_build $@ ;;
+    qemu-docker-tests) do_qemu_docker_tests $@ ;;
     init-dev) do_init_dev $1 ;;
     install-dev) do_install_dev $@ ;;
     create-initrd-root) do_create_initrd_root $@ ;;
