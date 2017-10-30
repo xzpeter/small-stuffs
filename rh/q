@@ -1,0 +1,130 @@
+#!/bin/bash
+
+qemu_bin=""
+qemu_options=""
+
+prog_name="$0"
+qemu_bin_x86=x86_64-softmmu/qemu-system-x86_64
+qemu_bin_list="$qemu_bin_x86 bin/$qemu_bin_x86
+               $(which qemu-system-x86_64 2>/dev/null)"
+
+output()
+{
+    echo "==> $@"
+}
+
+usage()
+{
+    cat <<EOF
+usage $prog_name <feature1[+feature2[+feature3...]]
+
+Boot a QEMU virtual machine that support specific feature list.
+Note: features will be there in order as specified.
+
+Supported features:
+- e1000
+- e1000_user
+- hmp
+- iommu
+- qmp
+- net
+- virtio-net-pci
+- virtio-net-pci_user
+- vtd
+EOF
+    exit 1
+}
+
+locate_qemu_binary()
+{
+    local bin
+
+    for bin in $qemu_bin_list; do
+        if [[ -x $bin ]]; then
+            qemu_bin=$bin
+            break
+        fi
+    done
+
+    if [[ -z "$qemu_bin" ]]; then
+        output "No QEMU binary found"
+        exit 1
+    fi
+
+    output "QEMU binary to use: $qemu_bin"
+}
+
+generate_qemu_options()
+{
+    # Split irqchip should be always good enough, and we need that for
+    # VT-d emulation.  Let's just make it a default.
+    local params="-M q35,kernel-irqchip=split -smp 4 -enable-kvm -m 2G"
+    local image="/images/fedora-25.qcow2"
+    local items="${1//+/ }" item
+    shift 1
+    local net_count=0
+    local net_name=""
+    local hostfwd=""
+    local has_hostfwd=false
+
+    for item in $items; do
+        case $item in
+            net|virtio-net-pci_user|virtio-net-pci)
+                net_name="net${net_count}"
+                if ! $has_hostfwd; then
+                    hostfwd=",hostfwd=tcp::5555-:22"
+                    has_hostfwd=true
+                else
+                    hostfwd=""
+                fi
+                params="$params -netdev user,id=${net_name}${hostfwd}"
+                params="$params -device virtio-net-pci,netdev=${net_name}"
+                net_count=$(( $net_count + 1 ))
+                ;;
+            e1000|e1000_user)
+                net_name="net${net_count}"
+                if ! $has_hostfwd; then
+                    hostfwd=",hostfwd=tcp::5555-:22"
+                    has_hostfwd=true
+                else
+                    hostfwd=""
+                fi
+                params="$params -netdev user,id=${net_name}${hostfwd}"
+                params="$params -device e1000,netdev=${net_name}"
+                net_count=$(( $net_count + 1 ))
+                ;;
+            iommu|vtd)
+                params="$params -device intel-iommu,intremap=on"
+                ;;
+            hmp)
+                params="$params -monitor stdio"
+                ;;
+            qmp)
+                params="$params -qmp stdio"
+                ;;
+            *)
+                output "Unknown entry in item list: $item"
+                exit 1
+                ;;
+        esac
+    done
+
+    params="$params $image"
+
+    if [[ -u "$@" ]]; then
+        params="$params $@"
+    fi
+
+    qemu_options="$params"
+
+    output "QEMU options: '$qemu_options'"
+}
+
+if [[ -z "$1" ]]; then
+    usage
+fi
+
+locate_qemu_binary
+generate_qemu_options $@
+
+$qemu_bin $qemu_options
