@@ -1305,7 +1305,7 @@ do_vpnc_dial_in()
 
     sleep 1
     echo "Re-starting offlineimap service..."
-    sudo pkill -9 -f /usr/bin/offlineimap &> /dev/null
+    pkill -9 -f /usr/bin/offlineimap &> /dev/null
 
     return 0
 }
