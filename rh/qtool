@@ -226,7 +226,7 @@ EOF
 
     echo "copy config files..."
     for file in $files; do
-        path=/root/$file
+        path=$HOME/$file
         scp $path $host:$path || err "copy file $path failed"
     done
 }
@@ -336,7 +336,7 @@ do_auto_apply()
         echo
         echo "Will stop when failed to apply a patch"
         echo
-        echo "Example: # qtool auto_apply /root/rpmbuild/SOURCES/*.patch"
+        echo "Example: # qtool auto_apply $HOME/rpmbuild/SOURCES/*.patch"
         return 1
     fi
     for patch in $patches; do
@@ -764,7 +764,7 @@ do_auto_bisect ()
 nick_to_email()
 {
     local nick="$1"
-    local alias_book="/root/.mutt/aliases"
+    local alias_book="$HOME/.mutt/aliases"
     local info=""
 
     info=$(grep -w $nick $alias_book 2>/dev/null | head -1)
