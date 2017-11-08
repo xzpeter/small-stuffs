@@ -180,7 +180,7 @@ do_qemu_docker_tests()
 {
     local entries=""
 
-    entries="docker-test-quick@centos7"
+    entries="docker-test-quick@centos6"
     entries="$entries docker-test-mingw@fedora"
     # entries="$entries docker-test-build@min-glib"
     # entries="$entries docker-test-block@fedora"
