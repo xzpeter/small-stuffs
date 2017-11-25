@@ -22,15 +22,10 @@ Boot a QEMU virtual machine that support specific feature list.
 Note: features will be there in order as specified.
 
 Supported features:
-- e1000
-- e1000_user
-- hmp
-- iommu
-- qmp
-- net
-- virtio-net-pci
-- virtio-net-pci_user
-- vtd
+- Network: e1000 (e1000_user), virtio-net-pci (net/virtio-net-pci_user)
+- Monitor: hmp, qmp
+- Migration: incoming_unix (incoming)
+- Misc Devices: vtd (iommu)
 EOF
     exit 1
 }
@@ -58,7 +53,7 @@ generate_qemu_options()
 {
     # Split irqchip should be always good enough, and we need that for
     # VT-d emulation.  Let's just make it a default.
-    local params="-M q35,kernel-irqchip=split -smp 4 -enable-kvm -m 2G"
+    local params="-M q35,kernel-irqchip=split -smp 4 -enable-kvm -m 1.5G"
     local image="/images/fedora-25.qcow2"
     local items="${1//+/ }" item
     shift 1
@@ -66,6 +61,9 @@ generate_qemu_options()
     local net_name=""
     local hostfwd=""
     local has_hostfwd=false
+
+    # Max bandwidth: 100MB/s (which emulates 1Gbps NIC)
+    params="$params -global migration.x-max-bandwidth=104857600"
 
     for item in $items; do
         case $item in
@@ -101,6 +99,9 @@ generate_qemu_options()
                 ;;
             qmp)
                 params="$params -qmp stdio"
+                ;;
+            incoming_unix|incoming)
+                params="$params -incoming unix:/tmp/migrate.sock"
                 ;;
             *)
                 output "Unknown entry in item list: $item"
