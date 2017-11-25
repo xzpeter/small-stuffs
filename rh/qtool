@@ -178,31 +178,44 @@ EOF
 
 do_qemu_docker_tests()
 {
-    local entries=""
-
-    entries="docker-test-quick@centos6"
-    entries="$entries docker-test-mingw@fedora"
+    # entries="docker-test-quick@centos6"
+    # entries="$entries docker-test-mingw@fedora"
     # entries="$entries docker-test-build@min-glib"
     # entries="$entries docker-test-block@fedora"
 
-    for entry in $entries; do
-        echo "=================================="
-        echo "Testing with $entry"
-        echo "=================================="
+    if [[ -n "$1" ]]; then
+        echo "Please specify base commit ID"
+        return 1
+    fi
 
-        time make SHOW_ENV=1 J=$ncpus $entry
+    base_commit="$1"
+    git log -1 $base_commit &> /dev/null
+    if [[ $? != 0 ]]; then
+        echo "Base commit '$base_commit' is incorrect"
+        return 1
+    fi
 
-        if [[ $? != 0 ]]; then
-            echo "=================================="
-            echo "Failed test with $entry"
-            echo "=================================="
-            return 1
-        else
-            echo "=================================="
-            echo "Succeeded test with $entry"
-            echo "=================================="
-        fi
-    done
+    set -e
+
+    echo "=================================="
+    echo "Testing checkpatch"
+    echo "=================================="
+
+    ./scripts/checkpatch.pl ${base_commit}..HEAD
+
+    echo "=================================="
+    echo "Testing docker builds for mingw"
+    echo "=================================="
+
+    time make SHOW_ENV=1 J=$ncpus docker-test-mingw@fedora
+
+    echo "=================================="
+    echo "Testing make check"
+    echo "=================================="
+
+    pushd bin && time make check -j$ncpus && popd
+
+    set +e
 
     return 0
 }
@@ -1551,7 +1564,7 @@ kernel_delete_one()
     fi
 
     for file in $files; do
-        rm -rf $file
+        sudo rm -rf $file
     done
 }
 
@@ -1595,7 +1608,7 @@ do_kernel_cleanup()
             echo_color red "Failed to delete kernel $kernel"
             return 1
         else
-            if ! grub2-mkconfig -o /boot/grub2/grub.cfg &> /dev/null; then
+            if ! sudo grub2-mkconfig -o /boot/grub2/grub.cfg &> /dev/null; then
                 echo "Failed update grub"
                 return 1
             fi
