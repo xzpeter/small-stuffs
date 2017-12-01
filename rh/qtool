@@ -48,6 +48,7 @@ qemu-docker-tests:     do proper docker tests for the tree
 send-patch:            send patches using git-send-email
 ssh-host:              SSH to host, with line buffering
 status-report:         generate status report
+tmux-init:             init the basic and default tmux session
 vpnc-dial-in:          dial in VPN
 
 EOF
@@ -1650,6 +1651,26 @@ do_git_tag_cleanup()
     fi
 }
 
+do_tmux_init()
+{
+    local index=""
+
+    tmux list-sessions &> /dev/null
+    if [[ $? == 0 ]]; then
+        echo "Detected existing tmux session, skip init"
+        return 0
+    fi
+
+    # this is #1
+    tmux new-session -d -n EMAIL mutt
+    for index in 2 3 4 5 6 7; do
+        tmux new-window -t 0:$index
+    done
+    tmux new-window -t 0:8 -n ROOT sudo -i
+    tmux new-window -t 0:9 -n ROOT sudo -i
+    tmux new-window -t 0:10 -n OFFLINEIMAP offlineimap
+}
+
 go_python ()
 {
     pybin="$(dirname $(realpath $prog_name))/pyqtool"
@@ -1687,6 +1708,7 @@ case $cmd in
     kernel-backtrace) do_backtrace $@ ;;
     kernel-cleanup) do_kernel_cleanup $@ ;;
     kernel-grep-function) do_kernel_grep_function $@ ;;
+    tmux-init) do_tmux_init $@ ;;
     status-report) go_python $cmd $@ ;;
     *) usage ;;
 esac
