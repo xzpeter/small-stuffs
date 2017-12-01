@@ -55,15 +55,18 @@ generate_qemu_options()
     # VT-d emulation.  Let's just make it a default.
     local params="-M q35,kernel-irqchip=split -smp 4 -enable-kvm -m 1.5G"
     local image="/images/fedora-25.qcow2"
-    local items="${1//+/ }" item
+    local items="${1//+/ }"
     shift 1
     local net_count=0
     local net_name=""
     local hostfwd=""
+    local item=""
     local has_hostfwd=false
 
     # Max bandwidth: 100MB/s (which emulates 1Gbps NIC)
     params="$params -global migration.x-max-bandwidth=104857600"
+    # append rest of params
+    params="$params $@"
 
     for item in $items; do
         case $item in
@@ -111,10 +114,6 @@ generate_qemu_options()
     done
 
     params="$params $image"
-
-    if [[ -u "$@" ]]; then
-        params="$params $@"
-    fi
 
     qemu_options="$params"
 
