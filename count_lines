@@ -27,7 +27,7 @@ fi
 echo -e "Type\t\tLines"
 echo "---------------------"
 for i in $types; do
-	lines=`find . -name "*.$i" | xargs cat | wc -l | tr -d ' '`
+	lines=`find . -name "*.$i" | xargs cat 2>/dev/null | wc -l | tr -d ' '`
 	if [ $lines -gt 0 ]; then
 		echo -e ".$i\t\t$lines"
 	fi
