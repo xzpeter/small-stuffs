@@ -65,6 +65,8 @@ generate_qemu_options()
 
     # Max bandwidth: 100MB/s (which emulates 1Gbps NIC)
     params="$params -global migration.x-max-bandwidth=104857600"
+    # Better thread namings
+    params="$params -name peter-vm,debug-threads=on"
     # append rest of params
     params="$params $@"
 
