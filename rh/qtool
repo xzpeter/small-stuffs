@@ -184,7 +184,7 @@ do_qemu_docker_tests()
     # entries="$entries docker-test-build@min-glib"
     # entries="$entries docker-test-block@fedora"
 
-    if [[ -n "$1" ]]; then
+    if [[ -z "$1" ]]; then
         echo "Please specify base commit ID"
         return 1
     fi
