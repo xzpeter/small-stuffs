@@ -54,7 +54,7 @@ generate_qemu_options()
     # Split irqchip should be always good enough, and we need that for
     # VT-d emulation.  Let's just make it a default.
     local params="-M q35,kernel-irqchip=split -smp 4 -enable-kvm -m 1.5G"
-    local image="/images/fedora-25.qcow2"
+    local image="/images/default.qcow2"
     local items="${1//+/ }"
     shift 1
     local net_count=0
@@ -62,6 +62,11 @@ generate_qemu_options()
     local hostfwd=""
     local item=""
     local has_hostfwd=false
+
+    if [[ ! -e $image ]]; then
+        echo "Please provide a image ($image) first"
+        exit 1
+    fi
 
     # Max bandwidth: 100MB/s (which emulates 1Gbps NIC)
     params="$params -global migration.x-max-bandwidth=104857600"
@@ -127,7 +132,7 @@ if [[ -z "$1" ]]; then
     usage
 fi
 
-locate_qemu_binary
 generate_qemu_options $@
+locate_qemu_binary
 
 $qemu_bin $qemu_options
