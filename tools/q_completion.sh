@@ -1,7 +1,7 @@
 _q_complete()
 {
     local sub_cmd_list
-    sub_cmd_list=$(q | grep "^- " | sed 's/^- //')
+    sub_cmd_list=$(q | grep "^- " | sed 's/.*: //; s/[,()/]/ /g')
     COMPREPLY=()
     prev="${COMP_WORDS[COMP_CWORD-1]}"
     cur="${COMP_WORDS[COMP_CWORD]}"

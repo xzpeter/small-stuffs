@@ -32,6 +32,7 @@ git-fix-commit:        fix specific git commit (rebase)
 git-self-review:       do self review of git commits
 git-compile-check:     check compile for commit range
 git-tag-cleanup:       cleanup useless git tags created by git-publish
+grub-update:           update grub configurations
 init-dev:              init dev environment for host
 install-dev:           install packages for dev
 kernel-backtrace:      dump backtrace for kernel function
@@ -1671,6 +1672,28 @@ do_tmux_init()
     tmux new-window -t 0:10 -n OFFLINEIMAP offlineimap
 }
 
+do_grub_update()
+{
+    local paths="/boot/grub2/grub.cfg /boot/efi/EFI/fedora/grub.cfg"
+    local path=""
+    local tmp_path="/tmp/grub.cfg.tmp"
+
+    set -e
+
+    echo "Generating GRUB config..."
+    sudo grub2-mkconfig -o $tmp_path
+
+    for path in $paths; do
+        if sudo test -f $path; then
+            echo "Updating grub config: $path"
+            sudo cp $tmp_path $path
+        fi
+    done
+
+    # This file is created with sudo, so we need root to remove it too
+    sudo rm -f $tmp_path
+}
+
 go_python ()
 {
     pybin="$(dirname $(realpath $prog_name))/pyqtool"
@@ -1710,6 +1733,7 @@ case $cmd in
     kernel-grep-function) do_kernel_grep_function $@ ;;
     tmux-init) do_tmux_init $@ ;;
     status-report) go_python $cmd $@ ;;
+    grub-update) do_grub_update $@ ;;
     *) usage ;;
 esac
 
