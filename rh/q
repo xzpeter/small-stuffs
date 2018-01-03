@@ -73,6 +73,8 @@ generate_qemu_options()
     params="$params -global migration.x-events=on"
     # Better thread namings
     params="$params -name peter-vm,debug-threads=on"
+    # Use host CPU by default, so by default it supports nested VMs
+    params="$params -cpu host"
     # append rest of params
     params="$params $@"
 
