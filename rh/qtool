@@ -1669,7 +1669,7 @@ do_tmux_init()
     done
     tmux new-window -t 0:8 -n ROOT sudo -i
     tmux new-window -t 0:9 -n ROOT sudo -i
-    tmux new-window -t 0:10 -n OFFLINEIMAP offlineimap
+    # tmux new-window -t 0:10 -n OFFLINEIMAP offlineimap
 }
 
 do_grub_update()
