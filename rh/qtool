@@ -240,10 +240,11 @@ EOF
     ssh-copy-id $host || err "failed copy SSH public key"
 
     echo "copy config files..."
+    all=""
     for file in $files; do
-        path=$HOME/$file
-        scp $path $host:$path || err "copy file $path failed"
+        all="$all $HOME/$file"
     done
+    scp $all $host: || err "copy file $path failed"
 }
 
 initrd_img="initrd.img"
@@ -1524,7 +1525,8 @@ do_install_dev ()
     local dnf=$(get_dnf)
     local pkgs="gcc automake autoconf git vim wget telnet zlib zlib-devel"
     pkgs="$pkgs glib2 glib2-devel pixman pixman-devel spice-server"
-    pkgs="$pkgs spice-server-devel usbredir-devel libguestfs*"
+    pkgs="$pkgs spice-server-devel usbredir-devel libguestfs* numactl"
+    pkgs="$pkgs numactl-devel"
 
     echo "Going to install following packages: "
     echo
