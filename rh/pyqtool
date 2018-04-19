@@ -9,6 +9,11 @@ import subprocess
 
 PROG_NAME = sys.argv[0]
 ORG_DIR = "%s/org/work.org" % os.getenv("HOME")
+upstream_keys = ["qemu", "kvm-unit-test", "kvm-unit-tests",
+                 "kvm", "linux", "kernel"]
+downstream_keys = ["redhat", "rh"]
+done_fmt = re.compile(r'\*+ DONE \[#[ABC]\] (.*)$')
+key_fmt = re.compile(r'^([^:]+): (.*)$')
 
 def shell(cmd):
     proc = subprocess.Popen(cmd, shell=True, stderr=subprocess.PIPE,
@@ -23,11 +28,7 @@ def file_write(path, data):
     except:
         print "Got exception in file_write"
 
-upstream_keys = ["qemu", "kvm-unit-test", "kvm-unit-tests",
-                 "kvm", "linux", "kernel"]
-downstream_keys = ["redhat", "rh"]
-
-def status_entry_append(summary, entry_in):
+def status_summary_append_entry(summary, entry_in):
     entry = copy.deepcopy(entry_in)
     if entry["key"] in downstream_keys:
         summary["downstream"].append(entry)
@@ -53,9 +54,46 @@ def status_summary_dump(summary):
             print("  %s" % line)
         print("")
 
+# input the line, generate a new entry for the task
+def status_parse_subject_line(line):
+    entry = {}
+    line = done_fmt.match(line).groups()[0]
+    res = key_fmt.match(line)
+    if res:
+        key = res.groups()[0].lower()
+        title = res.groups()[1]
+    else:
+        # this is a raw subject, not for patches
+        key = ""
+        title = line
+    entry["subject"] = line
+    entry["key"] = key
+    entry["title"] = title
+    entry["content"] = "\n"     # Empty content
+    return entry
+
+def status_summary_append_entry_context(entry, line):
+    if line:
+        entry["content"] += "  " + line + "\n"
+    else:
+        # we only keep one newline
+        if len(entry["content"]) >= 2 and entry["content"][-2] != "\n\n":
+            entry["content"] += "\n"
+
+# return non-null updated entry if parse success, or None which means
+# that we stop parsing content here.
+def status_parse_content_line(entry, line):
+    if not entry or line.startswith("CLOSED:"):
+        return entry
+    if line == "==END==":
+        # stop reading content any more for the reports
+        status_summary_append_entry(summary, entry)
+        # reset entry
+        return {}
+    status_summary_append_entry_context(entry, line)
+    return entry
+
 def cmd_generate_status_report(args):
-    done_fmt = re.compile(r'\*+ DONE \[#[ABC]\] (.*)$')
-    key_fmt = re.compile(r'^([^:]+): (.*)$')
     logfile = open(ORG_DIR)
     entry = {}
     summary = {
@@ -75,47 +113,19 @@ def cmd_generate_status_report(args):
         if line.startswith("*"):
             if entry:
                 # First, save previous entry if there is
-                status_entry_append(summary, entry)
+                status_summary_append_entry(summary, entry)
+                entry = {}
             if not done_fmt.match(line):
                 # This is possibly a TODO/DOING task
-                entry = {}
                 continue
-            # This is a subject line
-            line = done_fmt.match(line).groups()[0]
-            res = key_fmt.match(line)
-            if res:
-                key = res.groups()[0].lower()
-                title = res.groups()[1]
-            else:
-                # this is a raw subject, not for patches
-                key = ""
-                title = line
-            entry["subject"] = line
-            entry["key"] = key
-            entry["title"] = title
-            # Reset content
-            entry["content"] = "\n"
+            # This is a subject line, init entry object
+            entry = status_parse_subject_line(line)
         else:
             # This is a content line
-            if not entry or line.startswith("CLOSED:"):
-                continue
-            if line == "==END==":
-                # stop reading content any more for the reports
-                status_entry_append(summary, entry)
-                entry = {}
-                continue
-
-            # keep this line somehow into content
-            if line:
-                entry["content"] += "  " + line + "\n"
-            else:
-                # we only keep one newline
-                if len(entry["content"]) >= 2 and \
-                   entry["content"][-2] != "\n\n":
-                    entry["content"] += "\n"
+            entry = status_parse_content_line(entry, line)
 
     if entry:
-        status_entry_append(summary, entry)
+        status_summary_append_entry(summary, entry)
 
     status_summary_dump(summary)
 
