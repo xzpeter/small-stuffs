@@ -1526,7 +1526,7 @@ do_install_dev ()
     local pkgs="gcc automake autoconf git vim wget telnet zlib zlib-devel"
     pkgs="$pkgs glib2 glib2-devel pixman pixman-devel spice-server"
     pkgs="$pkgs spice-server-devel usbredir-devel libguestfs* numactl"
-    pkgs="$pkgs numactl-devel"
+    pkgs="$pkgs numactl-devel bison flex elfutils-libelf-devel bc"
 
     echo "Going to install following packages: "
     echo
