@@ -82,7 +82,7 @@ def status_summary_append_entry_context(entry, line):
 
 # return non-null updated entry if parse success, or None which means
 # that we stop parsing content here.
-def status_parse_content_line(entry, line):
+def status_parse_content_line(summary, entry, line):
     if not entry or line.startswith("CLOSED:"):
         return entry
     if line == "==END==":
@@ -122,7 +122,7 @@ def cmd_generate_status_report(args):
             entry = status_parse_subject_line(line)
         else:
             # This is a content line
-            entry = status_parse_content_line(entry, line)
+            entry = status_parse_content_line(summary, entry, line)
 
     if entry:
         status_summary_append_entry(summary, entry)
