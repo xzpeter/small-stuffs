@@ -139,7 +139,7 @@ def cmd_generate_status_report(args):
 
     status_summary_dump(summary)
 
-    print "Scores: %s (%s days)\n" % (scores / days, days)
+    print "Scores: %s (%s days)\n" % (scores / days if days else 0, days)
 
     return 0
 
