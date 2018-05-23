@@ -45,7 +45,7 @@ def status_summary_dump(summary):
     for entry in summary["upstream"] + summary["downstream"] + summary["misc"]:
         print("* %s" % entry["subject"])
         if entry["content"].strip():
-            print(entry["content"])
+            print("\n" + entry["content"].strip("\n") + "\n")
         else:
             print("")
     if summary["review"]:
