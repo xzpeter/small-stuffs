@@ -12,7 +12,7 @@ ORG_DIR = "%s/org/work.org" % os.getenv("HOME")
 upstream_keys = ["qemu", "kvm-unit-test", "kvm-unit-tests",
                  "kvm", "linux", "kernel"]
 downstream_keys = ["redhat", "rh"]
-done_fmt = re.compile(r'\*+ DONE \[#[ABC]\] (.*)$')
+done_fmt = re.compile(r'\*+ (DONE|DOING) \[#[ABC]\] (.*)$')
 date_fmt = re.compile(r'\* \[.*\] +- +([ABCD]|\d+)$')
 key_fmt = re.compile(r'^([^:]+): (.*)$')
 
@@ -58,7 +58,7 @@ def status_summary_dump(summary):
 # input the line, generate a new entry for the task
 def status_parse_subject_line(line):
     entry = {}
-    line = done_fmt.match(line).groups()[0]
+    line = done_fmt.match(line).groups()[1]
     res = key_fmt.match(line)
     if res:
         key = res.groups()[0].lower()
