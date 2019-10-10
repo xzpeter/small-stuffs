@@ -35,6 +35,7 @@ git-tag-cleanup:       cleanup useless git tags created by git-publish
 grub-update:           update grub configurations
 init-dev:              init dev environment for host
 install-dev:           install packages for dev
+isolate-cpus:          do further isolation of CPUs
 kernel-backtrace:      dump backtrace for kernel function
 kernel-boot:           choose which version of kernel to boot in host
 kernel-grep-function:  find kernel function with key
@@ -51,6 +52,7 @@ ssh-host:              SSH to host, with line buffering
 status-report:         generate status report
 tmux-init:             init the basic and default tmux session
 vpnc-dial-in:          dial in VPN
+ping-vpn-servers:      test network connection of servers
 
 EOF
     exit 1
@@ -1667,11 +1669,11 @@ do_tmux_init()
 
     # this is #1
     tmux new-session -d -n EMAIL mutt
-    for index in 2 3 4 5 6 7 8; do
+    for index in 2 3 4 5 6 7; do
         tmux new-window -t 0:$index
     done
-    tmux new-window -t 0:9 -n TOP htop
-    tmux new-window -t 0:10 -n DMESG journalctl -kf
+    tmux new-window -t 0:8 -n TOP htop
+    tmux new-window -t 0:9 -n DMESG journalctl -kf
 }
 
 do_grub_update()
@@ -1696,10 +1698,49 @@ do_grub_update()
     sudo rm -f $tmp_path
 }
 
+do_isolate_cpus()
+{
+    local pid=""
+    local cpu_mask="$1"
+    local pid_list=""
+
+    if [[ -z "$cpu_mask" ]]; then
+        echo "usage: isolate-cpus <cpu_mask>"
+        return 1
+    fi
+
+    pid_list="$(pgrep -f i915/signal) $(pgrep -f usb-storage)"
+    pid_list="$pid_list $(pgrep -f jbd2/)"
+    
+    for pid in $pid_list; do
+        echo "Binding PID $pid to cpu mask $cpu_mask"
+        sudo taskset -p $cpu_mask $pid
+    done
+}
+
 go_python ()
 {
     pybin="$(dirname $(realpath $prog_name))/pyqtool"
     $pybin $@
+}
+
+ovpn_path="/etc/NetworkManager/system-connections"
+ovpn_timeout=1s
+do_ping_vpn_servers()
+{
+    local files=$(ls $ovpn_path/*.ovpn)
+
+    echo "Testing connection with servers..."
+
+    for file in $files; do
+        site=$(sudo grep remote $file | sed 's/remote=//')
+        out=$(timeout $ovpn_timeout ping -c 1 $site 2>/dev/null |
+                  grep icmp | sed 's/.*=//')
+        if [[ $? != 0 ]]; then
+            out="Timed out (>=$ovpn_timeout)"
+        fi
+        echo "Server $site: $out"
+    done
 }
 
 cmd=$1
@@ -1710,6 +1751,7 @@ case $cmd in
     qemu-docker-tests) do_qemu_docker_tests $@ ;;
     init-dev) do_init_dev $1 ;;
     install-dev) do_install_dev $@ ;;
+    isolate-cpus) do_isolate_cpus $@ ;;
     create-initrd-root) do_create_initrd_root $@ ;;
     build-initrd) do_build_initrd $1 ;;
     kernel-run) do_kernel_run $@ ;;
@@ -1729,6 +1771,7 @@ case $cmd in
     fake-editor) do_fake_editor $@ ;;
     prepare-send) do_prepare_send $@ ;;
     pci) go_python $cmd $@ ;;
+    ping-vpn-servers) do_ping_vpn_servers $@ ;;
     vpnc-dial-in) do_vpnc_dial_in $@ ;;
     kernel-backtrace) do_backtrace $@ ;;
     kernel-cleanup) do_kernel_cleanup $@ ;;
