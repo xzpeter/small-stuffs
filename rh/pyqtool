@@ -27,7 +27,7 @@ def file_write(path, data):
         # print "Write data '%s' to file '%s'" % (data, path)
         open(path, "w").write(data)
     except:
-        print "Got exception in file_write"
+        print("Got exception in file_write")
 
 def status_summary_append_entry(summary, entry_in):
     entry = copy.deepcopy(entry_in)
@@ -144,7 +144,7 @@ def cmd_generate_status_report(args):
 
     status_summary_dump(summary)
 
-    print "Scores: %s (%s days)\n" % (scores / days if days else 0, days)
+    print("Scores: %s (%s days)\n" % (scores / days if days else 0, days))
 
     return 0
 
@@ -203,7 +203,7 @@ pci_driver_list = [
 ]
 
 def pci_cmd_help():
-    print PCI_CMD_HELP
+    print(PCI_CMD_HELP)
     return 1
 
 def pci_is_bdf(bdf):
@@ -277,33 +277,33 @@ def cmd_pci_status(args=[]):
     other_list = pci_device_list_get_by_driver(blacklist=["vfio-pci",
                                                           "pci-stub"])
 
-    print
-    print "PCI devices that binded to vfio-pci:"
-    print
+    print()
+    print("PCI devices that binded to vfio-pci:")
+    print()
     for dev in vfio_list:
-        print "  %s %s" % (dev["addr"], dev["info"]["name"])
+        print("  %s %s" % (dev["addr"], dev["info"]["name"]))
     if not vfio_list:
-        print "  (None)"
+        print("  (None)")
     print
 
-    print
-    print "PCI devices that binded to pci-stub:"
-    print
+    print()
+    print("PCI devices that binded to pci-stub:")
+    print()
     for dev in stub_list:
-        print "  %s %s" % (dev["addr"], dev["info"]["name"])
+        print("  %s %s" % (dev["addr"], dev["info"]["name"]))
     if not stub_list:
-        print "  (None)"
-    print
+        print("  (None)")
+    print()
 
-    print "PCI devices that binded to other driver:"
-    print
+    print("PCI devices that binded to other driver:")
+    print()
     for dev in other_list:
         printed = True
-        print "  %s %s (%s)" % (dev["addr"], dev["info"]["name"],
-                                dev["driver"])
+        print("  %s %s (%s)" % (dev["addr"], dev["info"]["name"],
+                                dev["driver"]))
     if not other_list:
-        print "  (None)"
-    print
+        print("  (None)")
+    print()
 
 def pci_device_exists(device):
     dev_tree = pci_tree_get()
@@ -315,19 +315,19 @@ def pci_device_exists(device):
 def pci_device_list_check(devices):
     # check all devices are valid
     if not devices:
-        print "Need to provide device (or device list). Please choose from:"
+        print("Need to provide device (or device list). Please choose from:")
         cmd_pci_status()
         return 1
     for dev in devices:
         if not pci_is_bdf(dev):
-            print "'%s' format wrong (should be BB:DD.FF)" % dev
+            print("'%s' format wrong (should be BB:DD.FF)" % dev)
             return 1
         if not pci_device_exists(dev):
-            print "Device '%s' does not exist" % dev
+            print("Device '%s' does not exist" % dev)
             return 1
 
 def pci_driver_bind(driver, addr):
-    print "Binding device '%s' to driver '%s'" % (addr, driver)
+    print("Binding device '%s' to driver '%s'" % (addr, driver))
     dev = pci_device_get(addr)
     if driver in ("vfio-pci", "pci-stub"):
         path_new = "/sys/bus/pci/drivers/%s/new_id" % driver
@@ -339,7 +339,7 @@ def pci_driver_bind(driver, addr):
         file_write(path_bind, "0000:" + addr)
 
 def pci_driver_unbind(driver, addr):
-    print "Unbinding device '%s' from driver '%s'" % (addr, driver)
+    print("Unbinding device '%s' from driver '%s'" % (addr, driver))
     path = "/sys/bus/pci/drivers/" + driver + "/unbind"
     file_write(path, "0000:" + addr)
 
@@ -349,15 +349,15 @@ def vfio_module_probe():
 def pci_dev_isolate(dev, to_isolate, target="vfio-pci"):
     "Either isolate/recover a PCI device"
     if target not in ("vfio-pci", "pci-stub"):
-        print "target '%s' incorrect" % target
+        print("target '%s' incorrect" % target)
         exit(1)
     if to_isolate:
         # bind it to vfio-pci/pci-stub driver
         if target == "vfio-pci":
             vfio_module_probe()
         if dev["driver"] == target:
-            print "Device '%s' already binded to %s, skip" \
-                % (dev["addr"], target)
+            print("Device '%s' already binded to %s, skip" \
+                % (dev["addr"], target))
             return
         if dev["driver"]:
             # there is existing driver, unbind
@@ -367,8 +367,8 @@ def pci_dev_isolate(dev, to_isolate, target="vfio-pci"):
         # bind it to generic driver
         module = dev["info"]["module"]
         if dev["driver"] == module:
-            print "Device '%s' already binded to driver '%s', skip" \
-                % (dev["addr"], module)
+            print("Device '%s' already binded to driver '%s', skip" \
+                % (dev["addr"], module))
             return
         if dev["driver"]:
             pci_driver_unbind(dev["driver"], dev["addr"])
@@ -394,11 +394,11 @@ def cmd_pci_recover(devices):
                                                            "pci-stub"])
         devices = map(lambda x: x["addr"], devices)
         if not devices:
-            print "No isolated/stubbed device to recover"
+            print("No isolated/stubbed device to recover")
             return 1
-        print "Recovering all isolated/stubbed devices:"
+        print("Recovering all isolated/stubbed devices:")
         for dev in devices:
-            print "  %s" % dev
+            print("  %s" % dev)
     if pci_device_list_check(devices):
         return 1
     dev_tree = pci_tree_get()
@@ -418,7 +418,7 @@ def cmd_pci_routine(args):
 
     subcmd = args[1]
     if subcmd not in pci_cmd_list:
-        print "Unknown PCI subcommand: %s" % subcmd
+        print("Unknown PCI subcommand: %s" % subcmd)
         return pci_cmd_help()
 
     return pci_cmd_list[subcmd](args[2:])
@@ -435,12 +435,12 @@ CMD_HANDLERS = {
 }
 
 def print_help():
-    print "usage: %s <cmd>" % PROG_NAME
-    print
-    print "Command list:"
-    print
+    print("usage: %s <cmd>" % PROG_NAME)
+    print()
+    print("Command list:")
+    print()
     for cmd in CMD_HANDLERS:
-        print "%s - %s" % (cmd, CMD_HANDLERS[cmd]["desc"])
+        print("%s - %s" % (cmd, CMD_HANDLERS[cmd]["desc"]))
 
 if len(sys.argv) <= 1:
     print_help()
@@ -449,7 +449,7 @@ if len(sys.argv) <= 1:
 cmd = sys.argv[1]
 
 if cmd not in CMD_HANDLERS:
-    print "Command %s unknown" % cmd
+    print("Command %s unknown" % cmd)
     exit(1)
 
 exit(CMD_HANDLERS[cmd]["handler"](sys.argv[1:]))
