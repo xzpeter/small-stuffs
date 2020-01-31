@@ -6,6 +6,8 @@ import sys
 import json
 import copy
 import subprocess
+import requests
+from bs4 import BeautifulSoup
 
 PROG_NAME = sys.argv[0]
 ORG_DIR = "%s/org/work.org" % os.getenv("HOME")
@@ -15,6 +17,7 @@ downstream_keys = ["redhat", "rh"]
 done_fmt = re.compile(r'\*+ (DONE|DOING) \[#[ABC]\] (.*)$')
 date_fmt = re.compile(r'\* \[.*\] +- +([ABCD]|\d+)$')
 key_fmt = re.compile(r'^([^:]+): (.*)$')
+bz_fmt = re.compile(r"^\d{7}$")
 
 def shell(cmd):
     proc = subprocess.Popen(cmd, shell=True, stderr=subprocess.PIPE,
@@ -423,6 +426,21 @@ def cmd_pci_routine(args):
 
     return pci_cmd_list[subcmd](args[2:])
 
+bz_url_search = "https://bugzilla.redhat.com/buglist.cgi?bug_status=NEW&bug_status=ASSIGNED&email1=peterx%40redhat.com&emailassigned_to1=1&emailtype1=substring&query_format=advanced"
+bz_url_prefix = "https://bugzilla.redhat.com/show_bug.cgi?id="
+org_bz_format = "** TODO [#B] %s\n   %s"
+
+def cmd_list_bz(args):
+    html_doc = requests.get(bz_url_search).text
+    soup = BeautifulSoup(html_doc, 'html.parser')
+    for link in soup.find_all("a"):
+        if not bz_fmt.match(str(link.string)):
+            continue
+        bz_url = bz_url_prefix + link.string
+        bz_doc = requests.get(bz_url).text
+        bz = BeautifulSoup(bz_doc, 'html.parser')
+        print(org_bz_format % (bz.title.string, bz_url))
+
 CMD_HANDLERS = {
     "status-report": {
         "desc": "Generate status report",
@@ -432,6 +450,10 @@ CMD_HANDLERS = {
         "desc": "PCI related helper operations",
         "handler": cmd_pci_routine,
     },
+    "list-bz": {
+        "desc": "List RH BZs",
+        "handler": cmd_list_bz,
+    }
 }
 
 def print_help():
