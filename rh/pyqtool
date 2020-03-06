@@ -66,6 +66,7 @@ def status_summary_dump(summary):
         print("")
         for line in summary["misc"]:
             print("  - %s" % line)
+        print("")
 
 # input the line, generate a new entry for the task
 def status_parse_subject_line(line):
