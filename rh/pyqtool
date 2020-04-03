@@ -20,6 +20,7 @@ done_fmt = re.compile(r'\*+ (DONE|DOING) \[#[ABC]\] (.*)$')
 date_fmt = re.compile(r'\* \[.*\] +- +([ABCD]|\d+)$')
 key_fmt = re.compile(r'^([^:]+): (.*)$')
 bz_fmt = re.compile(r"^\d{7}$")
+bz_link_fmt = "https://bugzilla.redhat.com/show_bug.cgi?id="
 
 def shell(cmd):
     proc = subprocess.Popen(cmd, shell=True, stderr=subprocess.PIPE,
@@ -36,15 +37,19 @@ def file_write(path, data):
 
 def status_summary_append_entry(summary, entry_in):
     entry = copy.deepcopy(entry_in)
-    if entry["key"] in downstream_keys:
+    key = entry["key"]
+    if key in downstream_keys:
         summary["downstream"].append(entry)
-    elif entry["key"] in review_keys:
+    elif key in review_keys:
         summary["review"].append(entry["title"])
-    elif entry["key"] in misc_keys:
+    elif key in misc_keys:
         summary["misc"].append(entry["title"])
-    elif entry["key"] in upstream_keys and \
+    elif key in upstream_keys and \
          ("PATCH" in entry["title"] or "RFC" in entry["title"]):
         summary["upstream"].append(entry)
+    elif entry["subject"].find(bz_link_fmt) == 0:
+        entry["subject"] = entry["subject"].replace(bz_link_fmt, "BZ")
+        summary["major"].append(entry)
     else:
         summary["major"].append(entry)
 
