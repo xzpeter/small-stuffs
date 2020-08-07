@@ -1,0 +1,373 @@
+#!/usr/bin/env bash
+#
+# kernel-bisect: kernel bisection automation using QEMU/KVM
+#
+# To use this script, we need to have these things:
+#
+# 1. The Linux git repository with at least one good/bad commit of a started
+#    bisection process.
+#
+# 2. QEMU/KVM installed with a script to startup a vm daemon, and password-less
+#    access to the vm daemon.
+#
+# 3. A stable script to reproduce the bug (or check a new property).
+#
+# Author: Peter Xu <peterx@redhat.com>
+#
+# License: 3-clause BSD
+#
+
+#
+# These are the essential configs that we need to define in the config file
+# first before starting the kernel bisection.  For more information of these
+# parameters, please check config_check() below.  Or just run this script,
+# it'll tell you whatever you miss. :-)
+#
+VM_START_CMD=
+VM_HOSTNAME=
+
+bisect_skip()
+{
+    exit 125
+}
+
+# Over 127 would be fine
+bisect_stop()
+{
+    if [[ -n "$@" ]]; then
+        echo "$@"
+    fi
+    echo "Latest error message:"
+    cat ${KERNEL_BI_ERROR}
+    exit 255
+}
+
+timestamp()
+{
+    date +%D-%H:%M:%S
+}
+
+#
+# Globals
+#
+PROG_NAME=$(basename $0)
+PROG_VER=0.1
+N_CPUS=$(getconf _NPROCESSORS_ONLN)
+KERNEL_BI_OUTPUT=kernel-bisect-output
+KERNEL_BI_BISECT_CONF=~/.kernel-bisect.conf
+KERNEL_BI_LOG=${KERNEL_BI_OUTPUT}/bisect.log
+KERNEL_BI_ERROR=${KERNEL_BI_OUTPUT}/error.log
+KERNEL_BI_BUILD_PIDFILE=${KERNEL_BI_OUTPUT}/build.pid
+KERNEL_BI_IMAGE=arch/x86/boot/bzImage
+KERNEL_BI_MAP=System.map
+KERNEL_BI_VERSION=$(make kernelrelease 2>/dev/null)
+VM_PIDFILE=/tmp/kernel-bisect-vm.pid
+VM_BISECT_CMD="$@"
+VM_RETVAL=
+
+help_msg()
+{
+    cat <<EOF
+$PROG_NAME version $PROG_VER.
+
+This program is used in pair with "git bisect run" to bisect a kernel.  One
+QEMU/KVM virtual machine is needed for the bisection procedure.
+
+To do normal auto-bisection, we can use:
+
+  $ git bisect run \$SCRIPT_NAME \$PARAMS
+
+Correspondingly, to bisect a kernel using this wrapper script, we can use (the
+program $PROG_NAME must be in \$PATH):
+
+  $ git bisect run $PROG_NAME \$GUEST_SCRIPT_NAME \$PARAMS
+
+To manually run this program for only once, we can use:
+
+  $ $PROG_NAME \$GUEST_SCRIPT_NAME \$PARAMS
+
+The test script \$GUEST_SCRIPT_NAME must return either 0 or 1.
+
+EOF
+    bisect_stop
+}
+
+# Let's start with an empty line
+echo
+
+if [[ -z "$VM_BISECT_CMD" ]]; then
+    help_msg
+fi
+
+if [[ $? != 0 || -z "$KERNEL_BI_VERSION" ]]; then
+    bisect_stop "Please make sure to run this under root of Linux git repo!"
+fi
+
+if [[ ! -f $KERNEL_BI_BISECT_CONF ]]; then
+    bisect_stop "Please create $KERNEL_BI_BISECT_CONF file first!"
+fi
+
+. $KERNEL_BI_BISECT_CONF
+
+config_check()
+{
+    if [[ ! -x "$VM_START_CMD" ]]; then
+        cat <<EOF
+Please specify a executable VM_START_CMD in $KERNEL_BI_BISECT_CONF.
+
+This should point to the executable script to start a daemonized Linux VM.  The
+script should allow to take a \$PIDFILE parameter, so it will be launched as:
+
+  \$VM_START_CMD \$PIDFILE
+
+After the command completes, we should be able to observe the pid of the VM
+daemon in \$PIDFILE.
+
+EOF
+        bisect_stop
+    fi
+
+    if [[ -z "$VM_HOSTNAME" ]]; then
+        cat <<EOF
+Please specify VM_HOSTNAME in $KERNEL_BI_BISECT_CONF.
+
+This should be the hostname to ssh to VM via "ssh \$VM_HOSTNAME".
+
+EOF
+        bisect_stop
+    fi
+}
+
+print_wait()
+{
+    echo -n "[$(timestamp)] $@..."
+}
+
+print_success()
+{
+    echo " Succeeded."
+}
+
+config_dump()
+{
+    echo "$PROG_NAME (version: $PROG_VER) configurations:"
+    echo
+    echo "KERNEL_BI_VERSION=$KERNEL_BI_VERSION"
+    echo "N_CPUS=$N_CPUS"
+    echo "VM_START_CMD=$VM_START_CMD"
+    echo "VM_HOSTNAME=$VM_HOSTNAME"
+    echo "VM_BISECT_CMD=$VM_BISECT_CMD"
+    echo
+}
+
+vm_run()
+{
+    ssh $VM_HOSTNAME $@ 2> ${KERNEL_BI_ERROR}
+}
+
+vm_sync()
+{
+    rsync -avl $1 $VM_HOSTNAME:$2 >> $KERNEL_BI_LOG 2> $KERNEL_BI_ERROR
+    if [[ $? != 0 ]]; then
+        echo -n "Syncing files to VM failed.  Please make sure rsync "
+        echo "is installed on the VM."
+        bisect_stop
+    fi
+}
+
+wait_pid()
+{
+    pid=$1
+
+    while :; do
+        if kill -s 0 $pid &> /dev/null; then
+           echo -n "."
+           sleep 1
+        else
+           break
+        fi
+    done
+}
+
+vm_start()
+{
+    local pid
+
+    if [[ -e "$VM_PIDFILE" ]]; then
+        pid=$(cat $VM_PIDFILE)
+        echo -n "Detected previous VM daemon ($pid), killing."
+        kill $pid
+        wait_pid $pid
+        print_success
+        rm -f $VM_PIDFILE
+    fi
+
+    print_wait "Starting VM"
+    $VM_START_CMD $VM_PIDFILE
+
+    if [[ $? != 0 ]]; then
+        echo "VM start failed."
+        bisect_stop
+    fi
+    print_success
+
+    print_wait "Waiting for VM to boot"
+
+    while :; do
+        if ssh -o ConnectTimeout=1 $VM_HOSTNAME ls &> /dev/null; then
+            break
+        fi
+        echo -n "."
+    done
+    print_success
+}
+
+vm_stop()
+{
+    local pid
+
+    pid=$(cat $VM_PIDFILE)
+    print_wait "Powering off VM daemon ($pid)"
+    vm_run poweroff
+    wait_pid $pid
+    print_success
+    rm -f $VM_PIDFILE
+}
+
+vm_run_test()
+{
+    print_wait "Executing VM bisection command"
+    vm_run "$VM_BISECT_CMD"
+    VM_RETVAL=$?
+    print_success
+}
+
+vm_reboot()
+{
+    vm_stop
+    vm_start
+}
+
+kernel_build()
+{
+    local commit pid
+
+    commit=$(git rev-parse HEAD)
+    rm -f $KERNEL_BI_LOG
+    print_wait "Configuring kernel"
+    make olddefconfig &> $KERNEL_BI_LOG || bisect_stop
+    print_success
+
+    nohup taskset -c 0-${N_CPUS} make -j${N_CPUS} &>> $KERNEL_BI_LOG &
+    pid=$!
+    print_wait "Building kernel (pid $pid)"
+    echo $pid > $KERNEL_BI_BUILD_PIDFILE
+    wait_pid $pid
+    if [[ $? != 0 ]]; then
+        echo "Build kernel failed against commit $commit!"
+        bisect_stop
+    fi
+    rm -f $KERNEL_BI_BUILD_PIDFILE
+    print_success
+}
+
+kernel_cleanup()
+{
+    local kernel_path
+
+    # Be very careful here to avoid removing unexpected files
+    if [[ -z "$KERNEL_BI_VERSION" ]]; then
+        echo "Detected empty \$KERNEL_BI_VERSION."
+        bisect_stop
+    fi
+    kernel_path=/boot/vmlinuz-${KERNEL_BI_VERSION}
+
+    print_wait "Cleanup VM kernel $KERNEL_BI_VERSION"
+    vm_run grubby --remove-kernel=$kernel_path
+    vm_run rm -f \
+           /boot/initramfs-${KERNEL_BI_VERSION}.img \
+           /boot/initramfs-${KERNEL_BI_VERSION}kdump.img \
+           /boot/System.map-${KERNEL_BI_VERSION} \
+           /boot/vmlinuz-${KERNEL_BI_VERSION}
+    vm_run rm -rf /lib/modules/${KERNEL_BI_VERSION}
+    print_success
+}
+
+kernel_install()
+{
+    local kernel_path lib_path
+
+    kernel_path=/boot/vmlinuz-${KERNEL_BI_VERSION}
+    lib_dir=/lib/modules
+
+    print_wait "Preparing modules"
+    make modules_install INSTALL_MOD_PATH=$KERNEL_BI_OUTPUT &>> $KERNEL_BI_LOG ||
+        bisect_stop " Failed"
+    print_success
+
+    print_wait "Installing modules to VM"
+    vm_sync $KERNEL_BI_OUTPUT/${lib_dir}/${KERNEL_BI_VERSION} ${lib_dir}
+    print_success
+
+    print_wait "Installing kernel to VM"
+    vm_sync $KERNEL_BI_IMAGE $kernel_path &&
+        vm_sync $KERNEL_BI_MAP /boot/System.map-${KERNEL_BI_VERSION} ||
+            bisect_stop " Failed"
+    print_success
+
+    print_wait "Generating initramfs on VM"
+    vm_run dracut -H --kver $KERNEL_BI_VERSION || bisect_stop " Failed"
+    print_success
+
+    print_wait "Updating GRUB on VM"
+    vm_run grubby --add-kernel=$kernel_path --title=Linux-${KERNEL_BI_VERSION} &&
+        vm_run grubby --set-default=$kernel_path ||
+            bisect_stop " Failed"
+    print_success
+}
+
+summary()
+{
+    print_wait "Removing temporary directory ($KERNEL_BI_OUTPUT)"
+    rm -rf $KERNEL_BI_OUTPUT
+    print_success
+
+    echo "Return value of this iteration is: $VM_RETVAL"
+
+    exit $VM_RETVAL
+}
+
+kernel_bisect_run()
+{
+    vm_start
+
+    # Test run the script first, detect error scripts
+    vm_run_test
+    if [[ $VM_RETVAL != 0 && $VM_RETVAL != 1 ]]; then
+        vm_stop
+        bisect_stop "Bisect VM command $VM_BISECT_CMD returned error code $VM_RETVAL."
+    fi
+
+    # Remove the kernel if existed
+    kernel_cleanup
+
+    kernel_build
+    kernel_install
+    vm_reboot
+
+    vm_run_test
+
+    kernel_cleanup
+    vm_stop
+
+    summary
+}
+
+mkdir -p ${KERNEL_BI_OUTPUT}
+
+config_check
+config_dump
+kernel_bisect_run
+
+# Shouldn't reach here. If so, stop bisection
+bisect_stop "Shouldn't reach the end"
