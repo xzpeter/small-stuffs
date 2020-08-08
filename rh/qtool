@@ -508,7 +508,7 @@ do_kernel_install ()
     local params="$@"
     local set_default=false
     local kernel_only=false
-    local output_dir="qtool_output"
+    local output_dir="output"
 
     if [[ -z "$vm" ]]; then
         cat <<EOF
@@ -544,31 +544,24 @@ EOF
     done
 
     rm -rf $output_dir
-    mkdir $output_dir
+    mkdir -p $output_dir
 
     ##############################
     # kernel
     ##############################
 
-    echo "Preparing kernel..."
-    make install INSTALL_PATH=$output_dir
-
     # get kernel version
     local kernel_version=""
-    kernel_version=$(ls $output_dir/vmlinuz-*)
-    if [[ $? != 0 ]]; then
-        echo "failed to find file $output_dir/vmlinuz-*"
-        return 1
-    fi
-    kernel_version=${kernel_version##*vmlinuz-}
+    kernel_version=$(make kernelrelease)
     echo "Kernel version to install:  '$kernel_version'"
     echo "Remote machine hostname:    '$vm'"
 
     echo "removing old kernel (if exists)"
-    ssh $vm rm -f /boot/*${kernel_version}
+    ssh $vm rm -f /boot/vmlinuz-${kernel_version} /boot/System.map-${kernel_version}
 
     echo "installing kernel"
-    scp $output_dir/*-${kernel_version} $vm:/boot/ > /dev/null
+    scp arch/x86/boot/bzImage $vm:/boot/vmlinuz-${kernel_version}
+    scp System.map $vm:/boot/System.map-${kernel_version}
 
     if $kernel_only; then
         echo "doing kernel-only install, done."
@@ -604,11 +597,12 @@ EOF
     ssh $vm dracut -H --kver $kernel_version
 
     echo "updating grub2"
-    ssh $vm grub2-mkconfig -o /boot/grub2/grub.cfg
+    ssh $vm grubby --add-kernel /boot/vmlinuz-$kernel_version \
+        --title "Linux-${kernel_version}"
 
     if $set_default; then
         echo "setting default boot kernel to $kernel_version"
-        qtool kernel-boot $vm $kernel_version
+        do_kernel_boot_select $vm $kernel_version
     fi
 
     echo "all done"
@@ -633,18 +627,7 @@ EOF
         return 1
     fi
 
-    local index=""
-    index=$(ssh $vm grub2-mkconfig -o /boot/grub2/grub.cfg 2>&1 | \
-                sed -n '/linux image/p' | sed -n /${version}\$/=)
-    if [[ -z "$index" ]]; then
-        echo "failed to find kernel version $version on host $vm"
-        return 1
-    fi
-    # move start offset to 0 (not 1)
-    index=$(( $index - 1 ))
-    ssh $vm sed -i "s\/^GRUB_DEFAULT=.*\$\/GRUB_DEFAULT=${index}\/" \
-        /etc/default/grub
-    ssh $vm grub2-mkconfig -o /boot/grub2/grub.cfg &> /dev/null
+    ssh $vm grubby --set-default /boot/vmlinuz-${version}
 }
 
 qtool_def_bisect_script=".qtool.bisect"

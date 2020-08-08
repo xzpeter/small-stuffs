@@ -7,6 +7,7 @@ prog_name="$0"
 qemu_bin_x86=x86_64-softmmu/qemu-system-x86_64
 qemu_bin_list="$qemu_bin_x86 bin/$qemu_bin_x86
                $(which qemu-system-x86_64 2>/dev/null)"
+qemu_pidfile=/tmp/q.pidfile
 
 output()
 {
@@ -23,7 +24,6 @@ Note: features will be there in order as specified.
 
 Supported features:
 - Network: e1000 (e1000_user), virtio-net-pci (net/virtio-net-pci_user)
-- Monitor: hmp, qmp
 - Migration: incoming_unix (incoming)
 - Misc Devices: vtd (iommu)
 EOF
@@ -53,7 +53,7 @@ generate_qemu_options()
 {
     # Split irqchip should be always good enough, and we need that for
     # VT-d emulation.  Let's just make it a default.
-    local params="-M q35,kernel-irqchip=split -smp 4 -enable-kvm -m 1.5G"
+    local params="-M q35,kernel-irqchip=split -smp 4 -enable-kvm -m 2G"
     local image="/images/default.qcow2"
     local items="${1//+/ }"
     shift 1
@@ -75,6 +75,12 @@ generate_qemu_options()
     params="$params -name peter-vm,debug-threads=on"
     # Use host CPU by default, so by default it supports nested VMs
     params="$params -cpu host"
+    # Deamonize
+    params="$params -daemonize -pidfile ${qemu_pidfile}"
+    # Enable spice
+    params="$params -spice addr=0.0.0.0,port=5900,disable-ticketing"
+    # HMP
+    params="$params -monitor telnet:localhost:6666,server,nowait"
     # append rest of params
     params="$params $@"
 
@@ -107,12 +113,6 @@ generate_qemu_options()
             iommu|vtd)
                 params="$params -device intel-iommu,intremap=on"
                 ;;
-            hmp)
-                params="$params -monitor stdio"
-                ;;
-            qmp)
-                params="$params -qmp stdio"
-                ;;
             incoming_unix|incoming)
                 params="$params -incoming unix:/tmp/migrate.sock"
                 ;;
@@ -132,6 +132,12 @@ generate_qemu_options()
 
 if [[ -z "$1" ]]; then
     usage
+fi
+
+if [[ -f $qemu_pidfile ]]; then
+    echo -n "PID file detected (pid=$(cat $qemu_pidfile)), "
+    echo "please stop the current daemon first."
+    exit 0
 fi
 
 generate_qemu_options $@

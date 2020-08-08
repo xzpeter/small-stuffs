@@ -53,7 +53,7 @@ timestamp()
 PROG_NAME=$(basename $0)
 PROG_VER=0.1
 N_CPUS=$(getconf _NPROCESSORS_ONLN)
-KERNEL_BI_OUTPUT=kernel-bisect-output
+KERNEL_BI_OUTPUT=output
 KERNEL_BI_BISECT_CONF=~/.kernel-bisect.conf
 KERNEL_BI_LOG=${KERNEL_BI_OUTPUT}/bisect.log
 KERNEL_BI_ERROR=${KERNEL_BI_OUTPUT}/error.log
