@@ -1544,7 +1544,8 @@ kernel_get_files()
 
 kernel_delete_one()
 {
-    local files=$(kernel_get_files $1)
+    local ver=$1
+    local files=$(kernel_get_files $ver)
     local file
 
     echo_color yellow "Will remove following files:"
@@ -1560,6 +1561,9 @@ kernel_delete_one()
     for file in $files; do
         sudo rm -rf $file
     done
+
+    sudo grubby --remove-kernel /boot/vmlinuz-$ver
+    return 0
 }
 
 do_kernel_cleanup()
