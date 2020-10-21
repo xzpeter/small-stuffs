@@ -1,0 +1,26 @@
+#!/bin/bash
+
+usage() {
+	cat <<EOF
+usage: pdf-merge <input1> [input2 [input3 ...]] <output>
+
+This script merges multiple pdf files into one.
+EOF
+	exit 0
+}
+
+if [[ $# -lt 2 ]]; then
+	usage
+fi
+
+array=($@)
+output="${array[$#-1]}"
+input="${array[0]}"
+for ((i=1; i<$#-1; i++)); do
+	input="$input ${array[$i]}"
+done
+
+echo "Merging PDFs: $input"
+echo "Output file: $output"
+
+#qpdf --empty --pages graduate_certificates_single.pdf wes-4633377.pdf -- out.pdf
