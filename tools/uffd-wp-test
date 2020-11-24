@@ -1,0 +1,41 @@
+
+# How many worker threads
+THREADS=1
+# How large is the total size (in pages)
+TOTAL_PAGES=5
+# How many loop to dump a message
+LOOP_SHOW=1
+
+UMAPSORT_BIN=umapsort-always-write
+MAX_LOOP=100
+
+export UMAP_BUFSIZE=4
+export UMAP_BACKEND=$1
+export UMAP_PAGE_EVICTORS=1
+export UMAP_PAGE_FILLERS=1
+export UMAP_LOG_LEVEL=DEBUG
+
+count=0
+
+while :; do 
+	out=$(./$UMAPSORT_BIN -f test1 -p $TOTAL_PAGES -t $THREADS 2>&1)
+	error=$?
+	count=$(( $count + 1 ))
+	if [[ $(( $count % $LOOP_SHOW )) == 0 ]]; then
+		echo "succeeded until loops=$count"
+	fi
+	if [[ $count == $MAX_LOOP ]]; then
+		echo "============================"
+		echo "All done!"
+		echo "============================"
+		break
+	fi
+	if [[ $error == 0 ]]; then
+		continue
+	fi
+	echo "============================"
+	echo "ERROR at loop $count"
+	echo "============================"
+	echo "$out"
+	break
+done

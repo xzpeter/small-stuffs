@@ -13,6 +13,11 @@ if [[ $# -lt 2 ]]; then
 	usage
 fi
 
+if ! which -q qpdf; then
+	echo "Please install 'qpdf' first!"
+	exit 1
+fi
+
 array=($@)
 output="${array[$#-1]}"
 input="${array[0]}"
@@ -23,4 +28,4 @@ done
 echo "Merging PDFs: $input"
 echo "Output file: $output"
 
-#qpdf --empty --pages graduate_certificates_single.pdf wes-4633377.pdf -- out.pdf
+qpdf --empty --pages $input -- $output
