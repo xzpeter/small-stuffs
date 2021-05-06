@@ -49,6 +49,7 @@ qemu-build:            build QEMU repository.
 qemu-docker-tests:     do proper docker tests for the tree
 send-patch:            send patches using git-send-email
 ssh-host:              SSH to host, with line buffering
+statistics:            calculate simple statistics for array of numbers
 status-report:         generate status report
 tmux-init:             init the basic and default tmux session
 vpnc-dial-in:          dial in VPN
@@ -1770,6 +1771,7 @@ case $cmd in
     kernel-grep-function) do_kernel_grep_function $@ ;;
     tmux-init) do_tmux_init $@ ;;
     status-report) go_python $cmd $@ ;;
+    statistics) go_python $cmd $@ ;;
     grub-update) do_grub_update $@ ;;
     *) usage ;;
 esac

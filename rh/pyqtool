@@ -457,6 +457,28 @@ def cmd_list_bz(args):
         bz = BeautifulSoup(bz_doc, 'html.parser')
         print(org_bz_format % (bz.title.string, bz_url))
 
+def cmd_statistics(args):
+    num_list = args[1:]
+    if len(num_list) == 0:
+        print("Please input a list of numbers for statistics.")
+        return -1
+    num_list = list(map(float, num_list))
+    total = average = 0
+    for i in num_list:
+        total += i
+    average = total / len(num_list)
+    pos_max = neg_max = 0
+    for i in num_list:
+        diff = i - average
+        if diff >= 0 and diff > pos_max:
+            pos_max = diff
+        elif diff < 0 and diff < neg_max:
+            neg_max = diff
+    diff = max(pos_max, -neg_max)
+    diff = diff / average * 100
+    print("Average: %.2f (+-%.2f%%)" % (average, diff))
+    return 0
+
 CMD_HANDLERS = {
     "status-report": {
         "desc": "Generate status report",
@@ -469,7 +491,11 @@ CMD_HANDLERS = {
     "list-bz": {
         "desc": "List RH BZs",
         "handler": cmd_list_bz,
-    }
+    },
+    "statistics": {
+        "desc": "Do basic statistical calculation on an array",
+        "handler": cmd_statistics,
+    },
 }
 
 def print_help():
