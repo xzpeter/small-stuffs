@@ -501,6 +501,20 @@ __host_ssh_reachable ()
     ssh $1 ls &> /dev/null
 }
 
+do_kernel_boot_install()
+{
+    local version="$1"
+
+    if ssh $vm grubby --info ALL | \
+            grep "kernel=\"/boot/vmlinuz-${version}\""; then
+        echo "Detected kernel ${version} in grub, skip install"
+    else
+        echo "Installing kernel ${version} in grub"
+        ssh $vm grubby --add-kernel /boot/vmlinuz-$version \
+            --title "Linux-${version}"
+    fi
+}
+
 do_kernel_install ()
 {
     # set this if we want to copy the kernels to VM
@@ -532,6 +546,11 @@ EOF
 
     if ! __host_ssh_reachable $vm; then
         echo "VM $vm not reachable by SSH"
+        return 1
+    fi
+
+    if ! ssh $vm which rsync &> /dev/null; then
+        echo "Please install rsync in the guest first"
         return 1
     fi
 
@@ -574,7 +593,7 @@ EOF
     ##############################
 
     echo "Preparing modules..."
-    make modules_install INSTALL_MOD_PATH=$output_dir
+    make modules_install INSTALL_MOD_PATH=$output_dir >/dev/null
 
     # cleanup "build" and "source" in case they are soft links
     local module_dir="$output_dir/lib/modules/${kernel_version}"
@@ -582,9 +601,6 @@ EOF
         echo "failed to find module directory: $module_dir"
         return 1
     fi
-    for file in build source; do
-        rm -f $module_dir/$file
-    done
 
     echo "removing old modules (if exists)"
     # the initramfs
@@ -592,14 +608,13 @@ EOF
     ssh $vm rm -rf /lib/modules/${kernel_version}
 
     echo "installing modules"
-    scp -r $module_dir $vm:/lib/modules > /dev/null
+    rsync -avl $module_dir $vm:/lib/modules > /dev/null
 
     echo "generating initramfs"
     ssh $vm dracut -H --kver $kernel_version
 
     echo "updating grub2"
-    ssh $vm grubby --add-kernel /boot/vmlinuz-$kernel_version \
-        --title "Linux-${kernel_version}"
+    do_kernel_boot_install "$kernel_version"
 
     if $set_default; then
         echo "setting default boot kernel to $kernel_version"
