@@ -342,11 +342,11 @@ kernel_bisect_run()
     vm_start
 
     # Test run the script first, detect error scripts
-    vm_run_test
-    if [[ $VM_RETVAL != 0 && $VM_RETVAL != 1 ]]; then
-        vm_stop
-        bisect_stop "Bisect VM command $VM_BISECT_CMD returned error code $VM_RETVAL."
-    fi
+    # vm_run_test
+    # if [[ $VM_RETVAL != 0 && $VM_RETVAL != 1 ]]; then
+    #     vm_stop
+    #     bisect_stop "Bisect VM command $VM_BISECT_CMD returned error code $VM_RETVAL."
+    # fi
 
     # Remove the kernel if existed
     kernel_cleanup
