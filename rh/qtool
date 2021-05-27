@@ -25,6 +25,7 @@ build-initrd:          build initrd.img from directory
 create-initrd-root:    create basic initramfs under directory specified
 fake-editor:           this is a fake editor, it pauses, wait for a
                        SIGUSR1 and then quit with errno=0
+git-apply-series:      apply a patchset saved by mutt
 git-commit-set-cc:     auto-generate CC list for commit
                        (this will remove all existing CC list!)
 git-commit-get-cc:     list all CC list for specific commit
@@ -1681,7 +1682,7 @@ do_tmux_init()
     done
     tmux new-window -t 0:8 -n TOP htop
     tmux new-window -t 0:9 -n DMESG journalctl -kf
-    tmux new-window -t 0:10 -n BICHON bichon
+    # tmux new-window -t 0:10 -n BICHON bichon
 }
 
 do_grub_update()
@@ -1751,6 +1752,22 @@ do_ping_vpn_servers()
     done
 }
 
+do_git_apply_series()
+{
+    local dir="$1"
+
+    if [[ -z "$dir" || ! -d "$dir" || ! -d "$dir/cur" ]]; then
+        echo "usage: git-apply-series <dir>"
+        echo "<dir> should be the root dir saved from mutt (which contains cur/)"
+        return -1
+    fi
+
+    suffix_list="$(cd $dir/cur && ls | sed 's/.*_//' | sort -n)"
+    for suffix in $suffix_list; do
+        git am $dir/cur/*_$suffix
+    done
+}
+
 cmd=$1
 shift 1
 
@@ -1770,6 +1787,7 @@ case $cmd in
     auto-bisect) do_auto_bisect $@ ;;
     send-patch) do_send_patch $@ ;;
     ssh-host) do_ssh_host $@ ;;
+    git-apply-series) do_git_apply_series $@ ;;
     git-commit-set-cc) do_git_commit_set_cc $@ ;;
     git-commit-get-cc) do_git_commit_get_cc $@ ;;
     git-self-review) do_git_self_review $@ ;;

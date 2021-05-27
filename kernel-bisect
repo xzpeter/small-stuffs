@@ -260,9 +260,12 @@ kernel_build()
 
     nohup taskset -c 0-${N_CPUS} make -j${N_CPUS} &>> $KERNEL_BI_LOG &
     pid=$!
-    print_wait "Building kernel (pid $pid)"
+    print_wait "Building kernel (pid $pid, try tail -f $KERNEL_BI_LOG for details)"
     echo $pid > $KERNEL_BI_BUILD_PIDFILE
-    wait_pid $pid
+    # NOTE: we can't use wait_pid here as we want to capture retcode of the
+    # background process, and bail out if needed (e.g. make failed).
+    # wait_pid $pid
+    wait $pid
     if [[ $? != 0 ]]; then
         echo "Build kernel failed against commit $commit!"
         bisect_stop
