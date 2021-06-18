@@ -249,6 +249,26 @@ EOF
         all="$all $HOME/$file"
     done
     scp $all $host: || err "copy file $path failed"
+
+    if ! ssh $host ls "~/bin" &> /dev/null; then
+        echo "init ~/bin..."
+        ssh $host git clone https://github.com/xzpeter/small-stuffs.git bin \
+            || err "create ~/bin failed"
+    else
+        echo "detected ~/bin, skip."
+    fi
+
+    ssh $host sudo ln -sf "~/bin/rh/qtool" /usr/local/bin \
+        || err "create qtool softlink failed"
+
+    echo "install dev packages..."
+    ssh $host sudo qtool install-dev || err "install packages failed"
+
+    echo "copy bash complete for qtool"
+    ssh $host sudo cp "~/bin/tools/qtool_completion.sh" /etc/bash_completion.d/ \
+            || err "copy bash complete for qtool failed"
+
+    echo "All done!"
 }
 
 initrd_img="initrd.img"
@@ -1533,6 +1553,7 @@ do_install_dev ()
     pkgs="$pkgs glib2 glib2-devel pixman pixman-devel spice-server make"
     pkgs="$pkgs spice-server-devel usbredir-devel libguestfs* numactl"
     pkgs="$pkgs numactl-devel bison flex elfutils-libelf-devel bc"
+    pkgs="$pkgs ncurses-devel openssl dwarves zstd"
 
     echo "Going to install following packages: "
     echo
