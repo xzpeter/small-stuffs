@@ -46,6 +46,8 @@ qemu-kvm-core-${version}.rpm
 qemu-kvm-core-debuginfo-${version}.rpm
 qemu-kvm-debuginfo-${version}.rpm
 qemu-kvm-debugsource-${version}.rpm
+qemu-kvm-ui-spice-${version}.rpm
+qemu-kvm-ui-opengl-${version}.rpm
 "
 
 for f in $file_list; do
