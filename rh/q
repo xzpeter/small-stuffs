@@ -54,7 +54,7 @@ generate_qemu_options()
     # Split irqchip should be always good enough, and we need that for
     # VT-d emulation.  Let's just make it a default.
     local params="-M q35,kernel-irqchip=split -smp 4 -enable-kvm -m 4G"
-    local image="/images/default.qcow2"
+    local image="/home/images/default.qcow2"
     local items="${1//+/ }"
     shift 1
     local net_count=0
