@@ -78,7 +78,7 @@ generate_qemu_options()
     # Deamonize
     params="$params -daemonize -pidfile ${qemu_pidfile}"
     # Enable spice
-    params="$params -spice addr=0.0.0.0,port=5900,disable-ticketing"
+    params="$params -spice addr=0.0.0.0,port=5900,disable-ticketing=on"
     # HMP
     params="$params -monitor telnet:localhost:6666,server,nowait"
     # append rest of params
