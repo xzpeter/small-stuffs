@@ -5,7 +5,16 @@ my_email="peterx@redhat.com"
 my_fullname="Peter Xu"
 my_sob_line="Signed-off-by: ${my_fullname} <${my_email}>"
 debug=false
-ncpus=$(lscpu | grep "^CPU(s)" | awk '{print $2}')
+os=$(uname -s)
+
+if [[ $os == Linux ]]; then
+    ncpus=$(lscpu | grep "^CPU(s)" | awk '{print $2}')
+elif [[ $os == Darwin ]]; then
+    ncpus=$(sysctl hw.logicalcpu | sed 's/.*: //')
+else
+    echo "Unknown OS: $os"
+    exit 1
+fi
 
 # we count the user of the fake editor, when reach zero, we unset
 # the fake editor. To gain ref, use git_set_fake_editor(), to
