@@ -9,8 +9,10 @@ os=$(uname -s)
 
 if [[ $os == Linux ]]; then
     ncpus=$(lscpu | grep "^CPU(s)" | awk '{print $2}')
+    realpath_bin=realpath
 elif [[ $os == Darwin ]]; then
     ncpus=$(sysctl hw.logicalcpu | sed 's/.*: //')
+    realpath_bin=grealpath
 else
     echo "Unknown OS: $os"
     exit 1
@@ -1707,12 +1709,16 @@ do_tmux_init()
 
     # this is #1
     tmux new-session -d -n EMAIL mutt
-    for index in 2 3 4 5 6 7; do
+    for index in 2 3 4 5 6; do
         tmux new-window -t 0:$index
     done
-    tmux new-window -t 0:8 -n TOP htop
-    tmux new-window -t 0:9 -n DMESG journalctl -kf
-    # tmux new-window -t 0:10 -n BICHON bichon
+    if [[ $os == Linux ]]; then
+        tmux new-window -t 0:7 -n TOP htop
+        tmux new-window -t 0:8 -n DMESG journalctl -kf
+        tmux new-window -t 0:9 -n WEECHAT weechat
+    elif [[ $os == Darwin ]]; then
+        tmux new-window -t 0:8 -n TOP top
+    fi
 }
 
 do_grub_update()
@@ -1759,7 +1765,7 @@ do_isolate_cpus()
 
 go_python ()
 {
-    pybin="$(dirname $(realpath $prog_name))/pyqtool"
+    pybin="$(dirname $(${realpath_bin} $prog_name))/pyqtool"
     $pybin $@
 }
 
