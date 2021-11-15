@@ -1,10 +1,31 @@
 #!/bin/bash
 
-cg_name="mm_limit_cgrp"
-cg2_root="/sys/fs/cgroup"
-cg2_path="$cg2_root/$cg_name"
-mem_high_path="$cg2_path/memory.high"
-proc_path="$cg2_path/cgroup.procs"
+if mount | grep -qw cgroup2; then
+    ver=2
+elif mount | grep -qw cgroup; then
+    ver=1
+else
+    echo "No cgroup detected."
+    exit 1
+fi
+
+cg_name="mm_limit_cgroup"
+
+if [[ $ver == 1 ]]; then
+    cg_root="/sys/fs/cgroup/memory"
+else
+    cg_root="/sys/fs/cgroup"
+fi
+
+cg_path="$cg_root/$cg_name"
+
+if [[ $ver == 1 ]]; then
+    mem_high_path="$cg_path/memory.limit_in_bytes"
+else
+    mem_high_path="$cg_path/memory.high"
+fi
+
+proc_path="$cg_path/cgroup.procs"
 
 # By default, allow 4MB mem usage
 mem_high_default=4M
@@ -42,13 +63,13 @@ if [[ -z "$pid" ]]; then
     usage
 fi
 
-if [[ ! -d "$cg2_path" ]]; then
-    echo "Creating directory $cg2_path"
-    sudo mkdir $cg2_path || err "Failed to create $cg2_path"
+if [[ ! -d "$cg_path" ]]; then
+    echo "Creating directory $cg_path"
+    sudo mkdir $cg_path || err "Failed to create $cg_path"
 fi
 
 if ! [[ -f "$mem_high_path" ]]; then
-    err "Didn't find path $mem_high_path, maybe cgroup v1?"
+    err "Didn't find path $mem_high_path"
 fi
 
 echo "Setting $mem_high_path to $mem_high..."
