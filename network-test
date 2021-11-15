@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+
+import datetime
+import signal
+import ping3
+import time
+import sys
+
+def now():
+    return datetime.datetime.now()
+
+def get_ping():
+    if ping3.ping("google.com"):
+        return True
+    return False
+
+def str_s(s):
+    if s:
+        return "CONNECTED"
+    else:
+        return "DISCONNECTED"
+
+def update(quitting=False):
+    global t1, t2, s1, s2
+    t2 = now()
+    s2 = get_ping()
+    if quitting or (s2 is not s1):
+        # status changed
+        print("From %s to %s, %s" % (t1, t2, str_s(s1)))
+        t1 = t2
+        s1 = s2
+
+def handler(sig, stack):
+    update(True)
+    sys.exit(0)
+
+t1 = t2 = now()
+s1 = s2 = get_ping()
+
+signal.signal(signal.SIGINT, handler)
+
+print("Program starts at %s, %s" % (t1, str_s(s1)))
+
+while True:
+    time.sleep(5)
+    update()
+
+
+
+
