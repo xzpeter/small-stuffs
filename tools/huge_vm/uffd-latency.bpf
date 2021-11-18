@@ -1,0 +1,20 @@
+#include <linux/mm.h>
+
+kprobe:handle_userfault
+{
+	$fault = (struct vm_fault *)arg0;
+	if (!($fault->flags & FAULT_FLAG_RETRY_NOWAIT)) {
+		/* Let's skip fast gups - they don't count! */
+		@start[tid] = nsecs;
+		@stack[kstack]++;
+	}
+}
+
+kretprobe:handle_userfault
+{
+        if (@start[tid]) {
+                $delay = nsecs - @start[tid];
+                delete(@start[tid]);
+                @delay_us = hist($delay / 1000);
+        }
+}
