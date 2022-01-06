@@ -1,20 +1,39 @@
 #include <linux/mm.h>
 
+BEGIN
+{
+    @total_nsec = (uint64)0;
+    @total_count = (uint64)0;
+}
+
 kprobe:handle_userfault
 {
-	$fault = (struct vm_fault *)arg0;
-	if (!($fault->flags & FAULT_FLAG_RETRY_NOWAIT)) {
-		/* Let's skip fast gups - they don't count! */
-		@start[tid] = nsecs;
-		@stack[kstack]++;
-	}
+    $fault = (struct vm_fault *)arg0;
+    if (!($fault->flags & FAULT_FLAG_RETRY_NOWAIT)) {
+        /* Let's skip fast gups - they don't count! */
+        @start[tid] = nsecs;
+        // @stack[kstack]++;
+    }
 }
 
 kretprobe:handle_userfault
 {
-        if (@start[tid]) {
-                $delay = nsecs - @start[tid];
-                delete(@start[tid]);
-                @delay_us = hist($delay / 1000);
-        }
+    if (@start[tid]) {
+        $delay = nsecs - @start[tid];
+        delete(@start[tid]);
+        @delay_us = hist($delay / 1000);
+        @total_nsec += $delay;
+        @total_count += 1;
+    }
+}
+
+END
+{
+    if (@total_count) {
+        printf("Average: %lu (us)\n", @total_nsec / @total_count / 1000);
+    } else {
+        printf("No data collected\n");
+    }
+    delete(@total_count);
+    delete(@total_nsec);
 }
