@@ -1826,10 +1826,10 @@ do_mail_find()
             subject=$(grep ^Subject: $path | head -1)
             if grep -q $@ $path; then
                 echo "---------------------------"
-                echo $subject
+                echo_color green $subject
+                echo_color yellow $date
+                echo_color yellow $from
                 echo $msgid
-                echo $date
-                echo $from
                 grep -C3 --color $@ $path
                 echo
             fi
