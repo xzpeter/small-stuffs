@@ -56,6 +56,7 @@ kernel-quit:           stop the running kernel...
 kernel-run:            run specific kernel using QEMU
 kernel-cleanup:        remove kernel of specific version
 mail-find:             search content in mailbox
+numa-info:             dump numa info
 prepare-send:          prepare one script to send patches
 pci:                   some PCI related operations
 qemu-build:            build QEMU repository.
@@ -1876,6 +1877,7 @@ case $cmd in
     statistics) go_python $cmd $@ ;;
     grub-update) do_grub_update $@ ;;
     mail-find) do_mail_find $@ ;;
+    numa-info) go_python $cmd $@ ;;
     *) usage ;;
 esac
 

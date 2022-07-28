@@ -7,6 +7,7 @@ import json
 import copy
 import subprocess
 import requests
+import resource
 from bs4 import BeautifulSoup
 
 PROG_NAME = sys.argv[0]
@@ -479,6 +480,25 @@ def cmd_statistics(args):
     print("Average: %.2f (+-%.2f%%)" % (average, diff))
     return 0
 
+def cmd_numa_info(args):
+    data = open("/proc/zoneinfo").read().split("\n")
+    node_id = -1
+    total = {}
+    psize = resource.getpagesize()
+    for line in data:
+        if line.startswith("Node "):
+            zone = line
+        elif line.startswith("  pages free"):
+            free_pages = int(line.replace("  pages free", "").strip())
+            total[zone] = free_pages
+
+    print("Free spaces for each zone:")
+    for zone in total:
+        space = int(total[zone] * psize / 1024 / 1024)
+        if space:
+            print("%s: %s (MB)" % (zone, space))
+    return 0
+
 CMD_HANDLERS = {
     "status-report": {
         "desc": "Generate status report",
@@ -495,6 +515,10 @@ CMD_HANDLERS = {
     "statistics": {
         "desc": "Do basic statistical calculation on an array",
         "handler": cmd_statistics,
+    },
+    "numa-info": {
+        "desc": "Print numa/zone information",
+        "handler": cmd_numa_info,
     },
 }
 
