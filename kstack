@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+
+import platform
+import psutil
+import sys
+
+pname = sys.argv[0]
+
+if len(sys.argv) < 2:
+    print("usage: %s <pid>" % pname)
+    exit(1)
+pid = int(sys.argv[1])
+
+if platform.uname().system != "Linux":
+    print("Only Linux is currently supported.")
+    exit(1)
+
+def read_tid(tid, entry):
+    return open("/proc/%s/%s" % (tid, entry)).read()
+
+current_process = psutil.Process(pid)
+threads = current_process.threads()
+for thread in threads:
+    tid = thread.id
+    comm = read_tid(tid, "comm").strip()
+    stack = read_tid(tid, "stack")
+    print("Thread %d ('%s'):\n\n%s" % (tid, comm, stack))
