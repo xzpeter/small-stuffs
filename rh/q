@@ -7,7 +7,7 @@ qemu_bin_x86=x86_64-softmmu/qemu-system-x86_64
 qemu_bin_list="$qemu_bin_x86 bin/$qemu_bin_x86
                $(which qemu-system-x86_64 2>/dev/null)"
 image=~/images/default.qcow2
-mem_size=4G
+mem_size=8G
 ncpu=$(nproc)
 
 output()
