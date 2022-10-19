@@ -4,6 +4,9 @@ prog_name=$0
 my_email="peterx@redhat.com"
 my_fullname="Peter Xu"
 my_sob_line="Signed-off-by: ${my_fullname} <${my_email}>"
+linux_dir="/home/peterx/git/linux"
+# This should be mostly correct if the image was built by virt-builder
+linux_root="/dev/vda3"
 debug=false
 os=$(uname -s)
 
@@ -67,6 +70,8 @@ statistics:            calculate simple statistics for array of numbers
 status-report:         generate status report
 tmux-init:             init the basic and default tmux session
 vpnc-dial-in:          dial in VPN
+vm-start-kernel:       start a VM (using 'q') booting a just-cooked kernel
+vm-image-commit:       commit recent VM changes to backing store
 ping-vpn-servers:      test network connection of servers
 
 EOF
@@ -1832,6 +1837,17 @@ do_mail_find()
     done
 }
 
+do_vm_start_kernel ()
+{
+    q -kernel $linux_dir/arch/x86/boot/bzImage \
+      -append "root=$linux_root console=ttyS0 nokaslr"
+}
+
+do_vm_image_commit ()
+{
+    qemu-img commit ~/images/default.qcow2
+}
+
 cmd=$1
 shift 1
 
@@ -1872,6 +1888,8 @@ case $cmd in
     grub-update) do_grub_update $@ ;;
     mail-find) do_mail_find $@ ;;
     numa-info) go_python $cmd $@ ;;
+    vm-start-kernel) do_vm_start_kernel $@ ;;
+    vm-image-commit) do_vm_image_commit $@ ;;
     *) usage ;;
 esac
 

@@ -1,13 +1,14 @@
 #!/bin/bash
 
 qemu_bin=""
-qemu_options=""
 
 prog_name="$0"
 qemu_bin_x86=x86_64-softmmu/qemu-system-x86_64
 qemu_bin_list="$qemu_bin_x86 bin/$qemu_bin_x86
                $(which qemu-system-x86_64 2>/dev/null)"
-qemu_pidfile=/tmp/q.pidfile
+image=~/images/default.qcow2
+mem_size=4G
+ncpu=$(nproc)
 
 output()
 {
@@ -17,15 +18,17 @@ output()
 usage()
 {
     cat <<EOF
-usage $prog_name <feature1[+feature2[+feature3...]]
+usage $prog_name [extra QEMU cmdlines...]
 
-Boot a QEMU virtual machine that support specific feature list.
-Note: features will be there in order as specified.
-
-Supported features:
-- Network: e1000 (e1000_user), virtio-net-pci (net/virtio-net-pci_user)
-- Migration: incoming_unix (incoming)
-- Misc Devices: vtd (iommu)
+Boot a QEMU virtual machine that support below things
+   - $ncpu vCPU, with memory size $mem_size
+   - SSH to guest at local port 5555
+   - HMP telnet at local port 6666
+   - GDB server at local port 1234
+   - QMP unix socket at /tmp/peter.qmp
+     (Connect use e.g.: ./qmp-shell -pv /tmp/peter.qmp)
+   - Device 1: virtio-net-pci, with slirp
+   - Device 2: virtio-blk-pci, with root image $image
 EOF
     exit 1
 }
@@ -49,98 +52,19 @@ locate_qemu_binary()
     output "QEMU binary to use: $qemu_bin"
 }
 
-generate_qemu_options()
-{
-    # Split irqchip should be always good enough, and we need that for
-    # VT-d emulation.  Let's just make it a default.
-    local params="-M q35,kernel-irqchip=split -smp 4 -enable-kvm -m 4G"
-    local image="/home/images/default.qcow2"
-    local items="${1//+/ }"
-    shift 1
-    local net_count=0
-    local net_name=""
-    local hostfwd=""
-    local item=""
-    local has_hostfwd=false
-
-    if [[ ! -e $image ]]; then
-        echo "Please provide a image ($image) first"
-        exit 1
-    fi
-
-    # Max bandwidth: 100MB/s (which emulates 1Gbps NIC)
-    params="$params -global migration.x-max-bandwidth=104857600"
-    params="$params -global migration.x-events=on"
-    # Better thread namings
-    params="$params -name peter-vm,debug-threads=on"
-    # Use host CPU by default, so by default it supports nested VMs
-    params="$params -cpu host"
-    # Deamonize
-    params="$params -daemonize -pidfile ${qemu_pidfile}"
-    # Enable spice
-    params="$params -spice addr=0.0.0.0,port=5900,disable-ticketing=on"
-    # HMP
-    params="$params -monitor telnet:localhost:6666,server,nowait"
-    # append rest of params
-    params="$params $@"
-
-    for item in $items; do
-        case $item in
-            net|virtio-net-pci_user|virtio-net-pci)
-                net_name="net${net_count}"
-                if ! $has_hostfwd; then
-                    hostfwd=",hostfwd=tcp::5555-:22"
-                    has_hostfwd=true
-                else
-                    hostfwd=""
-                fi
-                params="$params -netdev user,id=${net_name}${hostfwd}"
-                params="$params -device virtio-net-pci,netdev=${net_name}"
-                net_count=$(( $net_count + 1 ))
-                ;;
-            e1000|e1000_user)
-                net_name="net${net_count}"
-                if ! $has_hostfwd; then
-                    hostfwd=",hostfwd=tcp::5555-:22"
-                    has_hostfwd=true
-                else
-                    hostfwd=""
-                fi
-                params="$params -netdev user,id=${net_name}${hostfwd}"
-                params="$params -device e1000,netdev=${net_name}"
-                net_count=$(( $net_count + 1 ))
-                ;;
-            iommu|vtd)
-                params="$params -device intel-iommu,intremap=on"
-                ;;
-            incoming_unix|incoming)
-                params="$params -incoming unix:/tmp/migrate.sock"
-                ;;
-            *)
-                output "Unknown entry in item list: $item"
-                exit 1
-                ;;
-        esac
-    done
-
-    params="$params $image"
-
-    qemu_options="$params"
-
-    output "QEMU options: '$qemu_options'"
-}
-
-if [[ -z "$1" ]]; then
-    usage
-fi
-
-if [[ -f $qemu_pidfile ]]; then
-    echo -n "PID file detected (pid=$(cat $qemu_pidfile)), "
-    echo "please stop the current daemon first."
-    exit 0
-fi
-
-generate_qemu_options $@
 locate_qemu_binary
-
-$qemu_bin $qemu_options
+$qemu_bin -M q35,kernel-irqchip=split -accel kvm -s \
+          -name peter-vm,debug-threads=on -msg timestamp=on \
+          -nographic -cpu host -smp $ncpu -m $mem_size \
+          -global migration.x-max-bandwidth=104857600 \
+          -global migration.x-events=on \
+          -global migration.x-postcopy-ram=on \
+          -monitor telnet:localhost:6666,server,nowait \
+          -qmp unix:/tmp/peter.qmp,server,nowait \
+          -device ioh3420,id=pcie.1,chassis=1 \
+          -netdev user,id=net0,hostfwd=tcp::5555-:22 \
+          -device virtio-net-pci,netdev=net0,bus=pcie.1 \
+          -device ioh3420,id=pcie.2,chassis=2 \
+          -drive file=$image,id=drive0,if=none,aio=io_uring \
+          -device virtio-blk-pci,drive=drive0,bus=pcie.2 \
+          "$@"
