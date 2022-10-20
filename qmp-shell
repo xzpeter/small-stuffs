@@ -1,0 +1,8 @@
+#!/bin/bash
+
+path=~/git/qemu/scripts/qmp/qmp-shell
+if [[ -f $path ]]; then
+    $path $@
+else
+    echo "Cannot find qmp-shell at path $path"
+fi
