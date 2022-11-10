@@ -1,0 +1,55 @@
+/*
+ * Only applies to x86_64 below..
+ */
+
+kprobe:native_set_pte
+{
+	$collect = false;
+	$oldpte = *(uint64 *)arg0;
+	$newpte = (uint64)arg1;
+
+	$is_present = $oldpte & 1;
+	// _PAGE_UFFD_WP == 0x400
+	$is_present_wp = ($is_present && ($oldpte & 0x400));
+	// _PAGE_USER == 0x4
+	$is_swap_wp = ((!$is_present) && ($oldpte & 0x4));
+	// PTE_MARKER_UFFD_WP swap entry pte
+	$is_marker = ($oldpte == (uint64)0xf7fffffffffffc00);
+	// Whether the old pte was wr-protected?
+	$old_wp = $is_present_wp || $is_swap_wp || $is_marker;
+
+	$is_present = $newpte & 1;
+	// _PAGE_UFFD_WP == 0x400
+	$is_present_wp = ($is_present && ($newpte & 0x400));
+	// _PAGE_USER == 0x4
+	$is_swap_wp = ((!$is_present) && ($newpte & 0x4));
+	// PTE_MARKER_UFFD_WP swap entry pte
+	$is_marker = ($newpte == (uint64)0xf7fffffffffffc00);
+	// Whether the new pte was wr-protected?
+	$new_wp = $is_present_wp || $is_swap_wp || $is_marker;
+
+	// Trap when someone removes the wp
+	if ($old_wp && (!$new_wp)) {
+		@out[comm,kstack] = count();
+	}
+}
+
+kprobe:native_ptep_get_and_clear
+{
+	$collect = false;
+	$oldpte = *(uint64 *)arg0;
+	$is_present = $oldpte & 1;
+
+	// _PAGE_UFFD_WP == 0x400
+	$is_present_wp = ($is_present && ($oldpte & 0x400));
+
+	// _PAGE_USER == 0x4
+	$is_swap_wp = ((!$is_present) && ($oldpte & 0x4));
+
+	// PTE_MARKER_UFFD_WP swap entry pte
+	$is_marker = ($oldpte == (uint64)0xf7fffffffffffc00);
+
+	if ($is_present_wp || $is_swap_wp || $is_marker) {
+		@out[comm,kstack] = count();
+	}
+}

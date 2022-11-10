@@ -1,0 +1,111 @@
+From 92598d15e878774de5c85a34a477de561ad5b4a9 Mon Sep 17 00:00:00 2001
+From: Peter Xu <peterx@redhat.com>
+Date: Wed, 9 Nov 2022 10:41:06 -0500
+Subject: [PATCH] debug: mm: Make x86 native pte ops no-inline
+Content-type: text/plain
+
+Signed-off-by: Peter Xu <peterx@redhat.com>
+---
+ arch/x86/boot/compressed/ident_map_64.c |  3 +++
+ arch/x86/include/asm/pgtable_64.h       | 32 +++++++++++++++----------
+ arch/x86/mm/pgtable.c                   | 18 ++++++++++++++
+ 3 files changed, 40 insertions(+), 13 deletions(-)
+
+diff --git a/arch/x86/boot/compressed/ident_map_64.c b/arch/x86/boot/compressed/ident_map_64.c
+index d4a314cc50d6..3af1a7de454c 100644
+--- a/arch/x86/boot/compressed/ident_map_64.c
++++ b/arch/x86/boot/compressed/ident_map_64.c
+@@ -19,6 +19,9 @@
+ /* No PAGE_TABLE_ISOLATION support needed either: */
+ #undef CONFIG_PAGE_TABLE_ISOLATION
+ 
++/* PETER: Use inline functions for pgtable ops */
++#define X86_USE_INLINE_PGTABLE_OPS
++
+ #include "error.h"
+ #include "misc.h"
+ 
+diff --git a/arch/x86/include/asm/pgtable_64.h b/arch/x86/include/asm/pgtable_64.h
+index e479491da8d5..643a3fd65d9a 100644
+--- a/arch/x86/include/asm/pgtable_64.h
++++ b/arch/x86/include/asm/pgtable_64.h
+@@ -62,11 +62,30 @@ static inline bool mm_p4d_folded(struct mm_struct *mm)
+ void set_pte_vaddr_p4d(p4d_t *p4d_page, unsigned long vaddr, pte_t new_pte);
+ void set_pte_vaddr_pud(pud_t *pud_page, unsigned long vaddr, pte_t new_pte);
+ 
++#ifdef X86_USE_INLINE_PGTABLE_OPS
++/* Workaround boot code where mm/pgtable.c is not compiled in */
+ static inline void native_set_pte(pte_t *ptep, pte_t pte)
+ {
+ 	WRITE_ONCE(*ptep, pte);
+ }
+ 
++static inline pte_t native_ptep_get_and_clear(pte_t *xp)
++{
++#ifdef CONFIG_SMP
++	return native_make_pte(xchg(&xp->pte, 0));
++#else
++	/* native_local_ptep_get_and_clear,
++	   but duplicated because of cyclic dependency */
++	pte_t ret = *xp;
++	native_pte_clear(NULL, 0, xp);
++	return ret;
++#endif
++}
++#else
++void native_set_pte(pte_t *ptep, pte_t pte);
++pte_t native_ptep_get_and_clear(pte_t *xp);
++#endif
++
+ static inline void native_pte_clear(struct mm_struct *mm, unsigned long addr,
+ 				    pte_t *ptep)
+ {
+@@ -88,19 +107,6 @@ static inline void native_pmd_clear(pmd_t *pmd)
+ 	native_set_pmd(pmd, native_make_pmd(0));
+ }
+ 
+-static inline pte_t native_ptep_get_and_clear(pte_t *xp)
+-{
+-#ifdef CONFIG_SMP
+-	return native_make_pte(xchg(&xp->pte, 0));
+-#else
+-	/* native_local_ptep_get_and_clear,
+-	   but duplicated because of cyclic dependency */
+-	pte_t ret = *xp;
+-	native_pte_clear(NULL, 0, xp);
+-	return ret;
+-#endif
+-}
+-
+ static inline pmd_t native_pmdp_get_and_clear(pmd_t *xp)
+ {
+ #ifdef CONFIG_SMP
+diff --git a/arch/x86/mm/pgtable.c b/arch/x86/mm/pgtable.c
+index 8525f2876fb4..1b43810cbeb0 100644
+--- a/arch/x86/mm/pgtable.c
++++ b/arch/x86/mm/pgtable.c
+@@ -876,3 +876,21 @@ int pmd_free_pte_page(pmd_t *pmd, unsigned long addr)
+ 
+ #endif /* CONFIG_X86_64 */
+ #endif	/* CONFIG_HAVE_ARCH_HUGE_VMAP */
++
++void noinline native_set_pte(pte_t *ptep, pte_t pte)
++{
++	WRITE_ONCE(*ptep, pte);
++}
++
++pte_t noinline native_ptep_get_and_clear(pte_t *xp)
++{
++#ifdef CONFIG_SMP
++	return native_make_pte(xchg(&xp->pte, 0));
++#else
++	/* native_local_ptep_get_and_clear,
++	   but duplicated because of cyclic dependency */
++	pte_t ret = *xp;
++	native_pte_clear(NULL, 0, xp);
++	return ret;
++#endif
++}
+-- 
+2.37.3
+
