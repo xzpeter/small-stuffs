@@ -1,0 +1,39 @@
+#!/bin/bash
+
+prog=$(basename $0)
+op=$1
+nic=$2
+rate=$3
+
+if ! lsmod | grep -q sch_netem; then
+	echo "Please load sch_netem driver first."
+fi
+
+if [[ -z "$op" || -z "$nic" ]]; then
+	echo "usage: $prog <set|clear|check> <nic> [rate]"
+	echo
+	echo "Examples:"
+	echo "  $ $prog set eth0 50% # set drop rate 50% for eth0"
+	echo "  $ $prog clear eth0   # reset drop rate for eth0"
+	exit 0
+fi
+
+case $op in
+set)
+	if [[ -z "$rate" ]]; then
+		echo "Please specify rate"
+		exit 1
+	fi
+	sudo tc qdisc add dev $nic root netem loss $rate
+	;;
+clear)
+	sudo tc qdisc del dev $nic root netem
+	;;
+check)
+	sudo tc qdisc list | grep $nic | grep netem
+	;;
+*)
+	echo "Unknown command: $op"
+	exit 1
+	;;
+esac
