@@ -39,6 +39,7 @@ build-initrd:          build initrd.img from directory
 create-initrd-root:    create basic initramfs under directory specified
 fake-editor:           this is a fake editor, it pauses, wait for a
                        SIGUSR1 and then quit with errno=0
+generate-cscope:       generate cscope tags for current dir
 git-apply-series:      apply a patchset saved by mutt
 git-commit-set-cc:     auto-generate CC list for commit
                        (this will remove all existing CC list!)
@@ -1849,6 +1850,16 @@ do_vm_image_commit ()
     qemu-img commit ~/images/default.qcow2
 }
 
+do_generate_cscope ()
+{
+    echo "Cleaning up existing cscope files..."
+    rm -rf ./cscope.*
+    echo "Generating indexing files..."
+    find . -name "*.[ch]" > cscope.files
+    echo "Generating cscope tags..."
+    cscope -bqk &> /tmp/generate-cscope.log
+}
+
 cmd=$1
 shift 1
 
@@ -1891,6 +1902,7 @@ case $cmd in
     numa-info) go_python $cmd $@ ;;
     vm-start-kernel) do_vm_start_kernel $@ ;;
     vm-image-commit) do_vm_image_commit $@ ;;
+    generate-cscope) do_generate_cscope $@ ;;
     *) usage ;;
 esac
 
