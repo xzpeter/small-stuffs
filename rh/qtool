@@ -39,6 +39,8 @@ build-initrd:          build initrd.img from directory
 create-initrd-root:    create basic initramfs under directory specified
 fake-editor:           this is a fake editor, it pauses, wait for a
                        SIGUSR1 and then quit with errno=0
+flamegraph-record:     capture perf data for flamegraph
+flamegraph-convert:    convert perf data into perf.svg flamegraph
 generate-cscope:       generate cscope tags for current dir
 git-apply-series:      apply a patchset saved by mutt
 git-commit-set-cc:     auto-generate CC list for commit
@@ -1860,6 +1862,43 @@ do_generate_cscope ()
     cscope -bqk &> /tmp/generate-cscope.log
 }
 
+flamegraph_data="./flamegraph.data"
+
+do_flamegraph_convert()
+{
+    local folded=$(mktemp)
+    local log=$(mktemp)
+    local collapse_bin="stackcollapse-perf.pl"
+    local flame_bin="flamegraph.pl"
+
+    echo -n "Collapsing data... "
+    perf script -i $flamegraph_data | $collapse_bin >$folded 2>$log
+    if [[ $? != 0 ]]; then
+        echo "failed"
+        cat $log
+        rm $log
+        exit -1
+    fi
+    echo "done"
+
+    echo -n "Generating flamegraph.svg... "
+    if $flame_bin $folded > flamegraph.svg 2>$log; then
+        echo "failed"
+        cat $log
+        rm $log
+        exit -1
+    fi
+    echo "done"
+}
+
+
+
+do_flamegraph_record()
+{
+    trap "sudo chmod 0777 $flamegraph_data" SIGINT
+    sudo perf record -o $flamegraph_data -F 99 -a -g $@
+}
+
 cmd=$1
 shift 1
 
@@ -1871,6 +1910,8 @@ case $cmd in
     isolate-cpus) do_isolate_cpus $@ ;;
     create-initrd-root) do_create_initrd_root $@ ;;
     build-initrd) do_build_initrd $1 ;;
+    flamegraph-record) do_flamegraph_record $@ ;;
+    flamegraph-convert) do_flamegraph_convert $@ ;;
     kernel-run) do_kernel_run $@ ;;
     kernel-quit) do_kernel_quit ;;
     kernel-install) do_kernel_install $@ ;;
