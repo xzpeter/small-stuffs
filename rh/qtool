@@ -1843,8 +1843,7 @@ do_mail_find()
 do_vm_start_kernel ()
 {
     q -kernel $linux_dir/arch/x86/boot/bzImage \
-      -append "root=$linux_root console=ttyS0 nokaslr" \
-      "$@"
+      -append "root=$linux_root console=ttyS0 nokaslr $@"
 }
 
 do_vm_image_commit ()
