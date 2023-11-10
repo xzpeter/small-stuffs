@@ -53,9 +53,9 @@ def dump_checkpoints(checkpoints):
     for cp in checkpoints:
         ts, stage = cp
         # convert nanoseconds to microseconds
-        ts /= 1000
+        ts = int(ts / 1000)
         if prev_stage:
-            print("  %20s -> %20s: %20s (us)" % (prev_stage, stage, ts - prev_ts))
+            print("  %24s -> %24s: %20s (us)" % (prev_stage, stage, ts - prev_ts))
         prev_ts = ts
         prev_stage = stage
     print("")

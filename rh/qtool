@@ -1940,7 +1940,7 @@ case $cmd in
     grub-update) do_grub_update $@ ;;
     mail-find) do_mail_find $@ ;;
     numa-info) go_python $cmd $@ ;;
-    vm-start-kernel) do_vm_start_kernel $@ ;;
+    vm-start-kernel) do_vm_start_kernel "$@" ;;
     vm-image-commit) do_vm_image_commit $@ ;;
     generate-cscope) do_generate_cscope $@ ;;
     *) usage ;;
