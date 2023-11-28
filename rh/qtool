@@ -1567,13 +1567,12 @@ do_install_dev ()
 {
     local dnf=$(get_dnf)
     # gcc automake autoconf git vim wget telnet zlib zlib-devel glib2
-    # glib2-devel pixman pixman-devel spice-server make
-    # spice-server-devel usbredir-devel libguestfs* numactl
-    # numactl-devel bison flex elfutils-libelf-devel bc ninja-build
+    # glib2-devel pixman pixman-devel make usbredir-devel libguestfs*
+    # numactl numactl-devel bison flex elfutils-libelf-devel bc ninja-build
     # python3
     local pkgs="gcc automake autoconf git vim wget telnet zlib zlib-devel"
-    pkgs="$pkgs glib2 glib2-devel pixman pixman-devel spice-server make"
-    pkgs="$pkgs spice-server-devel usbredir-devel libguestfs* numactl"
+    pkgs="$pkgs glib2 glib2-devel pixman pixman-devel make"
+    pkgs="$pkgs usbredir-devel libguestfs* numactl"
     pkgs="$pkgs numactl-devel bison flex elfutils-libelf-devel bc"
     pkgs="$pkgs ncurses-devel openssl dwarves zstd ninja-build python3"
 
