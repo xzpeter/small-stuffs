@@ -31,12 +31,14 @@ def parse_log(logfile):
         if not line:
             # empty line
             continue
-        out = re.match('^\d+@(\d+) vmstate_downtime_([a-z]*) (.*)$', line)
+        out = re.match('^[0-9]+@([0-9]+) vmstate_downtime_([a-z]*) (.*)$', line)
+        if not out:
+            continue
         time_ns, trace_type, params = out.groups()
         if trace_type == "checkpoint":
             checkpoints.append([int(time_ns), params])
         elif trace_type in ["save", "load"]:
-            out = re.match("^type=(.*) idstr=(.*) instance_id=(.*) downtime=(\d+)$", params)
+            out = re.match("^type=(.*) idstr=(.*) instance_id=(.*) downtime=([0-9]+)$", params)
             vmsd_type, dev_id, ins_id, downtime = out.groups()
             if vmsd_type not in devices.keys():
                 raise Exception("VMSD type '%s' unknown" % vmsd_type)
