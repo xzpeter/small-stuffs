@@ -36,7 +36,8 @@ def parse_log(logfile):
             continue
         time_ns, trace_type, params = out.groups()
         if trace_type == "checkpoint":
-            checkpoints.append([int(time_ns), params])
+            # "ns" -> "us"
+            checkpoints.append([int(time_ns)/1000, params])
         elif trace_type in ["save", "load"]:
             out = re.match("^type=(.*) idstr=(.*) instance_id=(.*) downtime=([0-9]+)$", params)
             vmsd_type, dev_id, ins_id, downtime = out.groups()
@@ -54,12 +55,12 @@ def dump_checkpoints(checkpoints):
     print("Checkpoints analysis:\n")
     for cp in checkpoints:
         ts, stage = cp
-        # convert nanoseconds to microseconds
-        ts = int(ts / 1000)
         if prev_stage:
-            print("  %24s -> %24s: %20s (us)" % (prev_stage, stage, ts - prev_ts))
+            print("  %24s -> %24s: %20.1f (us)" % (prev_stage, stage, ts - prev_ts))
         prev_ts = ts
         prev_stage = stage
+    total = checkpoints[-1][0] - checkpoints[0][0]
+    print("  %24s    %24s: %20s (us)" % ("", "total downtime", total))
     print("")
 
 def dump_one_device(dev):
