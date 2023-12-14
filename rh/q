@@ -80,5 +80,6 @@ $qemu_bin -M q35,kernel-irqchip=split,nvdimm=on -accel kvm -s \
           -drive file=$image,id=drive0,if=none,aio=io_uring \
           -device virtio-blk-pci,drive=drive0,bus=pcie.2 \
           -device ioh3420,id=pcie.3,chassis=3 \
+          -device virtio-balloon,bus=pcie.3 \
           -device ioh3420,id=pcie.4,chassis=4 \
           "$@"

@@ -1569,12 +1569,13 @@ do_install_dev ()
     # gcc automake autoconf git vim wget telnet zlib zlib-devel glib2
     # glib2-devel pixman pixman-devel make usbredir-devel libguestfs*
     # numactl numactl-devel bison flex elfutils-libelf-devel bc ninja-build
-    # python3 openssl-devel
+    # python3 openssl-devel libcap libcap-devel
     local pkgs="gcc automake autoconf git vim wget telnet zlib zlib-devel"
     pkgs="$pkgs glib2 glib2-devel pixman pixman-devel make"
     pkgs="$pkgs usbredir-devel libguestfs* numactl openssl-devel"
     pkgs="$pkgs numactl-devel bison flex elfutils-libelf-devel bc"
     pkgs="$pkgs ncurses-devel openssl dwarves zstd ninja-build python3"
+    pkgs="$pkgs libcap libcap-devel"
 
     echo "Going to install following packages: "
     echo
