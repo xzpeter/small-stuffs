@@ -33,7 +33,7 @@ usage: $prog_name <cmd>
 
 supportted cmds:
 
-auto-apply:            apply patche list automatically
+apply-patches:         apply whole patchset using b4
 auto-bisect:           automatic bisection of bad codes
 build-initrd:          build initrd.img from directory
 create-initrd-root:    create basic initramfs under directory specified
@@ -382,48 +382,6 @@ do_kernel_run()
 do_kernel_quit ()
 {
     pkill -f "$prog_name kernel-run"
-}
-
-do_auto_apply()
-{
-    patches="$@"
-    count=0
-    if [[ -z "$patches" ]]; then
-        echo "usage: auto_apply <patch1> [patch2 [patch3 ...]]"
-        echo
-        echo "This will do the following:"
-        echo "  1. Try apply patch locally (try -p0 then -p1)"
-        echo "  2. Commit the patch using git"
-        echo
-        echo "Will stop when failed to apply a patch"
-        echo
-        echo "Example: # qtool auto_apply $HOME/rpmbuild/SOURCES/*.patch"
-        return 1
-    fi
-    for patch in $patches; do
-        applied=false
-        if [[ $patch != /* ]]; then
-            echo "Please provide patch full path for $patch"
-            return 1
-        fi
-        for level in 1 0; do
-            patch -t -p$level < $patch
-            if [[ $? == 0 ]]; then
-                applied=true
-                break
-            fi
-        done
-        if ! $applied; then
-            echo "patch '$patch' failed to apply, stop here."
-            return 1
-        fi
-        # TODO: when there are new files, I'd better detect it and
-        # commit too.
-        git commit -a -m "Apply patch $(basename $patch)"
-        count=$(( $count + 1 ))
-    done
-    echo "All $count patches applied successfully."
-    echo "Please service yourself to cleanup *.orig."
 }
 
 init_script_def='#!/bin/sh
@@ -1905,7 +1863,19 @@ do_flamegraph_convert()
     echo "done"
 }
 
+do_apply_patches()
+{
+    local msgid="$1"
 
+    if [[ -z "$msgid" ]]; then
+        echo "usage: $prog_name apply-patches <msgid>"
+        echo
+        echo "<msgid> is the thread Message-ID of any patchset on lore.kernel.org."
+        return -1
+    fi
+
+    b4 shazam -tls $msgid
+}
 
 do_flamegraph_record()
 {
@@ -1917,6 +1887,7 @@ cmd=$1
 shift 1
 
 case $cmd in
+    apply-patches) do_apply_patches $@ ;;
     qemu-build) do_qemu_build $@ ;;
     qemu-docker-tests) do_qemu_docker_tests $@ ;;
     init-dev) do_init_dev $1 ;;
@@ -1930,7 +1901,6 @@ case $cmd in
     kernel-quit) do_kernel_quit ;;
     kernel-install) do_kernel_install $@ ;;
     kernel-boot) do_kernel_boot_select $@ ;;
-    auto-apply) do_auto_apply $@ ;;
     auto-bisect) do_auto_bisect $@ ;;
     send-patch) do_send_patch $@ ;;
     ssh-host) do_ssh_host $@ ;;
