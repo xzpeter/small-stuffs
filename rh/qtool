@@ -4,7 +4,7 @@ prog_name=$0
 my_email="peterx@redhat.com"
 my_fullname="Peter Xu"
 my_sob_line="Signed-off-by: ${my_fullname} <${my_email}>"
-linux_dir="/home/peterx/git/linux"
+linux_dir="$HOME/git/linux"
 # This should be mostly correct if the image was built by virt-builder
 linux_root="/dev/vda3"
 debug=false
@@ -1842,8 +1842,23 @@ do_mail_find()
 
 do_vm_start_kernel ()
 {
-    q -kernel $linux_dir/arch/x86/boot/bzImage \
-      -append "root=$linux_root console=ttyS0 nokaslr $@"
+    local arch=$(uname -m)
+
+    case $arch in
+        x86_64)
+            kernel_path=$linux_dir/arch/x86/boot/bzImage
+            serial=ttyS0
+            ;;
+        ppc64le)
+            kernel_path=$linux_dir/arch/powerpc/boot/zImage.pseries
+            serial=hvc0
+            ;;
+        *)
+            echo "Unknown architecture: $arch"
+            ;;
+    esac
+
+    q -kernel $kernel_path -append "root=$linux_root console=$serial nokaslr $@"
 }
 
 do_vm_image_commit ()
