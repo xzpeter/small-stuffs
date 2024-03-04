@@ -1,0 +1,25 @@
+#!/bin/bash
+
+subject=""
+link=""
+
+while :; do
+    read line
+    if [[ -z "$line" ]]; then
+        break
+    fi
+    if [[ "$line" == "Subject: "* ]]; then
+        subject=${line/Subject: /}
+    elif echo "$line" | grep -qE "^Message-I[Dd]: "; then
+        line=${line/>/}
+        line=${line/Message-I[dD]: </https:\/\/lore.kernel.org\/r\/}
+        link="$line"
+    fi
+
+    if [[ -n "$subject" && -n "$link" ]]; then
+        break
+    fi
+done 
+
+echo "$subject"
+echo "$link"

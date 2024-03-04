@@ -7,8 +7,8 @@ kprobe:kvm_arch_vcpu_ioctl {
 
 kretprobe:kvm_arch_vcpu_ioctl {
     if (@ioctl[tid] && retval != 0) {
-        printf("KVM cpu ioctl() failure detected: tid=%d ioctl=0x%x\n",
-               tid, @ioctl[tid]);
+        printf("KVM cpu ioctl() failure detected: tid=%d ioctl=0x%x retval=%d\n",
+               tid, @ioctl[tid], retval);
     }
     delete(@ioctl[tid]);
 }
