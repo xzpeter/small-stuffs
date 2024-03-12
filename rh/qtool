@@ -37,6 +37,7 @@ apply-patches:         apply whole patchset using b4
 auto-bisect:           automatic bisection of bad codes
 build-initrd:          build initrd.img from directory
 create-initrd-root:    create basic initramfs under directory specified
+dump-kstack:           dump the kernel stack of all threads of a process
 fake-editor:           this is a fake editor, it pauses, wait for a
                        SIGUSR1 and then quit with errno=0
 flamegraph-record:     capture perf data for flamegraph
@@ -1883,11 +1884,31 @@ do_flamegraph_record()
     sudo perf record -o $flamegraph_data -F 99 -a -g $@
 }
 
+do_dump_kstack()
+{
+    local pid="$1"
+
+    if [[ -z "$pid" ]]; then
+        echo "usage: $prog_name dump-kstack <pid>"
+        echo
+        echo "Dump kernel stack of all the threads for process <pid>."
+        return -1
+    fi
+
+    pstree -p $pid | grep -o "([0-9]\+)" | sed 's/[()]//g' |
+        while read tid; do
+            echo "TID $tid stack:"
+            sudo cat /proc/$tid/stack
+            echo
+        done
+}
+
 cmd=$1
 shift 1
 
 case $cmd in
     apply-patches) do_apply_patches $@ ;;
+    dump-kstack) do_dump_kstack $@ ;;
     qemu-build) do_qemu_build $@ ;;
     qemu-docker-tests) do_qemu_docker_tests $@ ;;
     init-dev) do_init_dev $1 ;;
