@@ -62,6 +62,7 @@ kernel-install:        install the kernel (to specific VM)
 kernel-quit:           stop the running kernel...
 kernel-run:            run specific kernel using QEMU
 kernel-cleanup:        remove kernel of specific version
+kexec:                 use kexec facilities to direct boot into a new kernel
 mail-find:             search content in mailbox
 numa-info:             dump numa info
 prepare-send:          prepare one script to send patches
@@ -1903,6 +1904,67 @@ do_dump_kstack()
         done
 }
 
+kexec_find_latest_kver()
+{
+    ls -lt /boot/vmlinuz-* | head -1 | awk '{print $NF}' | sed 's/.*linuz-//'
+}
+
+do_kexec()
+{
+    local kver="$1"
+    local kernel_path
+    local initrd_path
+    local cmdline
+
+    if ! which kexec &> /dev/null; then
+        echo "Please install kexec-tools first"
+        return -1
+    fi
+
+    if [[ -z "$kver" ]]; then
+        kver=$(kexec_find_latest_kver)
+        if [[ $? != 0 ]]; then
+            echo "Failed to find the latest kernel version"
+            return -1
+        fi
+    fi
+
+    echo_color green "Preparing to boot into new kernel ${kver}, please type 'yes|y' to confirm: "
+    if ! read_yes; then
+        echo_color red "Cancelling kexec"
+        return -1
+    fi
+
+    kernel_path="/boot/vmlinuz-${kver}"
+    if [[ ! -e "$kernel_path" ]]; then
+        echo_color red "Kernel ($kernel_path) does not exist!"
+        return -1;
+    fi
+
+    initrd_path="/boot/initramfs-${kver}.img"
+    if [[ ! -e "$initrd_path" ]]; then
+        echo_color red "Initrd ($initrd_path) does not exist!"
+        return -1;
+    fi
+
+    # Some distros have BOOT_IMAGE points to the kernel image, scratch that
+    cmdline=$(cat /proc/cmdline | sed 's/BOOT_IMAGE[^ ]* //')
+    if [[ $? != 0 ]]; then
+        echo_color red "Failed to generate the default cmdline"
+        return -1
+    fi
+
+    echo_color yellow "Loading the new kernel and initrd images..."
+    sudo kexec -l "$kernel_path" --initrd="$initrd_path" --append="$cmdline"
+    if [[ $? != 0 ]]; then
+        echo_color red "Kexec loading the kernel and initrd failed"
+        return -1;
+    fi
+
+    echo_color green "Booting into the new kernel..."
+    sudo kexec -e
+}
+
 cmd=$1
 shift 1
 
@@ -1949,6 +2011,7 @@ case $cmd in
     vm-start-kernel) do_vm_start_kernel "$@" ;;
     vm-image-commit) do_vm_image_commit $@ ;;
     generate-cscope) do_generate_cscope $@ ;;
+    kexec) do_kexec $@ ;;
     *) usage ;;
 esac
 
