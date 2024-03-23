@@ -4,7 +4,7 @@ prog_name=$0
 my_email="peterx@redhat.com"
 my_fullname="Peter Xu"
 my_sob_line="Signed-off-by: ${my_fullname} <${my_email}>"
-linux_dir="/home/peterx/git/linux"
+linux_dir="$HOME/git/linux"
 # This should be mostly correct if the image was built by virt-builder
 linux_root="/dev/vda3"
 debug=false
@@ -33,10 +33,11 @@ usage: $prog_name <cmd>
 
 supportted cmds:
 
-auto-apply:            apply patche list automatically
+apply-patches:         apply whole patchset using b4
 auto-bisect:           automatic bisection of bad codes
 build-initrd:          build initrd.img from directory
 create-initrd-root:    create basic initramfs under directory specified
+dump-kstack:           dump the kernel stack of all threads of a process
 fake-editor:           this is a fake editor, it pauses, wait for a
                        SIGUSR1 and then quit with errno=0
 flamegraph-record:     capture perf data for flamegraph
@@ -61,6 +62,7 @@ kernel-install:        install the kernel (to specific VM)
 kernel-quit:           stop the running kernel...
 kernel-run:            run specific kernel using QEMU
 kernel-cleanup:        remove kernel of specific version
+kexec:                 use kexec facilities to direct boot into a new kernel
 mail-find:             search content in mailbox
 numa-info:             dump numa info
 prepare-send:          prepare one script to send patches
@@ -382,48 +384,6 @@ do_kernel_run()
 do_kernel_quit ()
 {
     pkill -f "$prog_name kernel-run"
-}
-
-do_auto_apply()
-{
-    patches="$@"
-    count=0
-    if [[ -z "$patches" ]]; then
-        echo "usage: auto_apply <patch1> [patch2 [patch3 ...]]"
-        echo
-        echo "This will do the following:"
-        echo "  1. Try apply patch locally (try -p0 then -p1)"
-        echo "  2. Commit the patch using git"
-        echo
-        echo "Will stop when failed to apply a patch"
-        echo
-        echo "Example: # qtool auto_apply $HOME/rpmbuild/SOURCES/*.patch"
-        return 1
-    fi
-    for patch in $patches; do
-        applied=false
-        if [[ $patch != /* ]]; then
-            echo "Please provide patch full path for $patch"
-            return 1
-        fi
-        for level in 1 0; do
-            patch -t -p$level < $patch
-            if [[ $? == 0 ]]; then
-                applied=true
-                break
-            fi
-        done
-        if ! $applied; then
-            echo "patch '$patch' failed to apply, stop here."
-            return 1
-        fi
-        # TODO: when there are new files, I'd better detect it and
-        # commit too.
-        git commit -a -m "Apply patch $(basename $patch)"
-        count=$(( $count + 1 ))
-    done
-    echo "All $count patches applied successfully."
-    echo "Please service yourself to cleanup *.orig."
 }
 
 init_script_def='#!/bin/sh
@@ -1567,15 +1527,15 @@ do_install_dev ()
 {
     local dnf=$(get_dnf)
     # gcc automake autoconf git vim wget telnet zlib zlib-devel glib2
-    # glib2-devel pixman pixman-devel spice-server make
-    # spice-server-devel usbredir-devel libguestfs* numactl
-    # numactl-devel bison flex elfutils-libelf-devel bc ninja-build
-    # python3
+    # glib2-devel pixman pixman-devel make usbredir-devel libguestfs*
+    # numactl numactl-devel bison flex elfutils-libelf-devel bc ninja-build
+    # python3 openssl-devel libcap libcap-devel
     local pkgs="gcc automake autoconf git vim wget telnet zlib zlib-devel"
-    pkgs="$pkgs glib2 glib2-devel pixman pixman-devel spice-server make"
-    pkgs="$pkgs spice-server-devel usbredir-devel libguestfs* numactl"
+    pkgs="$pkgs glib2 glib2-devel pixman pixman-devel make"
+    pkgs="$pkgs usbredir-devel libguestfs* numactl openssl-devel"
     pkgs="$pkgs numactl-devel bison flex elfutils-libelf-devel bc"
     pkgs="$pkgs ncurses-devel openssl dwarves zstd ninja-build python3"
+    pkgs="$pkgs libcap libcap-devel"
 
     echo "Going to install following packages: "
     echo
@@ -1842,9 +1802,23 @@ do_mail_find()
 
 do_vm_start_kernel ()
 {
-    q -kernel $linux_dir/arch/x86/boot/bzImage \
-      -append "root=$linux_root console=ttyS0 nokaslr" \
-      "$@"
+    local arch=$(uname -m)
+
+    case $arch in
+        x86_64)
+            kernel_path=$linux_dir/arch/x86/boot/bzImage
+            serial=ttyS0
+            ;;
+        ppc64le)
+            kernel_path=$linux_dir/arch/powerpc/boot/zImage.pseries
+            serial=hvc0
+            ;;
+        *)
+            echo "Unknown architecture: $arch"
+            ;;
+    esac
+
+    q -kernel $kernel_path -append "root=$linux_root console=$serial nokaslr $@"
 }
 
 do_vm_image_commit ()
@@ -1891,7 +1865,19 @@ do_flamegraph_convert()
     echo "done"
 }
 
+do_apply_patches()
+{
+    local msgid="$1"
 
+    if [[ -z "$msgid" ]]; then
+        echo "usage: $prog_name apply-patches <msgid>"
+        echo
+        echo "<msgid> is the thread Message-ID of any patchset on lore.kernel.org."
+        return -1
+    fi
+
+    b4 shazam -tls $msgid
+}
 
 do_flamegraph_record()
 {
@@ -1899,10 +1885,92 @@ do_flamegraph_record()
     sudo perf record -o $flamegraph_data -F 99 -a -g $@
 }
 
+do_dump_kstack()
+{
+    local pid="$1"
+
+    if [[ -z "$pid" ]]; then
+        echo "usage: $prog_name dump-kstack <pid>"
+        echo
+        echo "Dump kernel stack of all the threads for process <pid>."
+        return -1
+    fi
+
+    pstree -p $pid | grep -o "([0-9]\+)" | sed 's/[()]//g' |
+        while read tid; do
+            echo "TID $tid stack:"
+            sudo cat /proc/$tid/stack
+            echo
+        done
+}
+
+kexec_find_latest_kver()
+{
+    ls -lt /boot/vmlinuz-* | head -1 | awk '{print $NF}' | sed 's/.*linuz-//'
+}
+
+do_kexec()
+{
+    local kver="$1"
+    local kernel_path
+    local initrd_path
+    local cmdline
+
+    if ! which kexec &> /dev/null; then
+        echo "Please install kexec-tools first"
+        return -1
+    fi
+
+    if [[ -z "$kver" ]]; then
+        kver=$(kexec_find_latest_kver)
+        if [[ $? != 0 ]]; then
+            echo "Failed to find the latest kernel version"
+            return -1
+        fi
+    fi
+
+    echo_color green "Preparing to boot into new kernel ${kver}, please type 'yes|y' to confirm: "
+    if ! read_yes; then
+        echo_color red "Cancelling kexec"
+        return -1
+    fi
+
+    kernel_path="/boot/vmlinuz-${kver}"
+    if [[ ! -e "$kernel_path" ]]; then
+        echo_color red "Kernel ($kernel_path) does not exist!"
+        return -1;
+    fi
+
+    initrd_path="/boot/initramfs-${kver}.img"
+    if [[ ! -e "$initrd_path" ]]; then
+        echo_color red "Initrd ($initrd_path) does not exist!"
+        return -1;
+    fi
+
+    # Some distros have BOOT_IMAGE points to the kernel image, scratch that
+    cmdline=$(cat /proc/cmdline | sed 's/BOOT_IMAGE[^ ]* //')
+    if [[ $? != 0 ]]; then
+        echo_color red "Failed to generate the default cmdline"
+        return -1
+    fi
+
+    echo_color yellow "Loading the new kernel and initrd images..."
+    sudo kexec -l "$kernel_path" --initrd="$initrd_path" --append="$cmdline"
+    if [[ $? != 0 ]]; then
+        echo_color red "Kexec loading the kernel and initrd failed"
+        return -1;
+    fi
+
+    echo_color green "Booting into the new kernel..."
+    sudo kexec -e
+}
+
 cmd=$1
 shift 1
 
 case $cmd in
+    apply-patches) do_apply_patches $@ ;;
+    dump-kstack) do_dump_kstack $@ ;;
     qemu-build) do_qemu_build $@ ;;
     qemu-docker-tests) do_qemu_docker_tests $@ ;;
     init-dev) do_init_dev $1 ;;
@@ -1916,7 +1984,6 @@ case $cmd in
     kernel-quit) do_kernel_quit ;;
     kernel-install) do_kernel_install $@ ;;
     kernel-boot) do_kernel_boot_select $@ ;;
-    auto-apply) do_auto_apply $@ ;;
     auto-bisect) do_auto_bisect $@ ;;
     send-patch) do_send_patch $@ ;;
     ssh-host) do_ssh_host $@ ;;
@@ -1941,9 +2008,10 @@ case $cmd in
     grub-update) do_grub_update $@ ;;
     mail-find) do_mail_find $@ ;;
     numa-info) go_python $cmd $@ ;;
-    vm-start-kernel) do_vm_start_kernel $@ ;;
+    vm-start-kernel) do_vm_start_kernel "$@" ;;
     vm-image-commit) do_vm_image_commit $@ ;;
     generate-cscope) do_generate_cscope $@ ;;
+    kexec) do_kexec $@ ;;
     *) usage ;;
 esac
 
