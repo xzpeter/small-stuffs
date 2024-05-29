@@ -68,6 +68,7 @@ $qemu_bin -M q35,kernel-irqchip=split,nvdimm=on -accel kvm -s \
           -m $mem_size,slots=4,maxmem=$max_mem_size \
           -name peter-vm,debug-threads=on -msg timestamp=on \
           -nographic -cpu host -smp $ncpu \
+          -device intel-iommu \
           -global migration.x-max-bandwidth=104857600 \
           -global migration.x-events=on \
           -global migration.x-postcopy-ram=on \
@@ -82,4 +83,5 @@ $qemu_bin -M q35,kernel-irqchip=split,nvdimm=on -accel kvm -s \
           -device ioh3420,id=pcie.3,chassis=3 \
           -device virtio-balloon,bus=pcie.3 \
           -device ioh3420,id=pcie.4,chassis=4 \
+          -device e1000e \
           "$@"
