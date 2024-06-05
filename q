@@ -7,6 +7,7 @@ qemu_bin_x86=x86_64-softmmu/qemu-system-x86_64
 qemu_bin_list="$qemu_bin_x86 bin/$qemu_bin_x86
                $(which qemu-system-x86_64 2>/dev/null)"
 image=~/images/default.qcow2
+nvdimm_image=~/images/nvdimm1
 mem_size=8G
 # Allow to plug in extra mem
 max_mem_size=16G
@@ -74,6 +75,8 @@ $qemu_bin -M q35,kernel-irqchip=split,nvdimm=on -accel kvm -s \
           -global migration.x-postcopy-ram=on \
           -monitor telnet:localhost:6666,server,nowait \
           -qmp unix:/tmp/peter.qmp,server,nowait \
+          -object memory-backend-file,id=nvdimm-mem1,share=on,mem-path=$nvdimm_image,size=4G \
+          -device nvdimm,id=nvdimm1,memdev=nvdimm-mem1 \
           -device ioh3420,id=pcie.1,chassis=1 \
           -netdev user,id=net0,hostfwd=tcp::5555-:22 \
           -device virtio-net-pci,netdev=net0,bus=pcie.1 \
