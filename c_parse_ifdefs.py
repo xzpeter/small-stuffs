@@ -1,4 +1,18 @@
 #!/usr/bin/env python3
+#
+# This script is used to parse a partial C source code and dump the nested
+# "ifdef" blocks, so that if you're going to insert new codes under the
+# cursor you'll know when it will be compiled at all.
+#
+# You'll normally need to feed stdin with the buffer of (0, current_line)
+# of your C source file, and then it'll spit the ifdef stack out.  I assume
+# you use this with some scripting like Emacs Lisp otherwise it's awkward
+# to be used manually somehow.  An Emacs Lisp function can look like:
+#
+# (defun my-c-parse-ifdefs ()
+#  (interactive)
+#  (shell-command-on-region (point-min) (point) "c_parse_ifdefs.py"))
+#
 
 import json
 import sys
@@ -71,6 +85,11 @@ def c_ifdefs_parse(lines):
     return stack
 
 def c_ifdefs_print(stack):
+    if not stack:
+        print("[EMPTY IFDEF STACK]")
+        return
+    print("[IFDEF STACK DUMP]")
+    print("")
     for entry in stack:
         print(entry[1].strip())
 
