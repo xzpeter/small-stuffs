@@ -1803,6 +1803,31 @@ do_mail_find()
 do_vm_start_kernel ()
 {
     local arch=$(uname -m)
+    local side=$1
+    local qemu_extra=""
+    local qemu_tracefile="$HOME/q.qemu.tracepoints"
+
+    if [[ -n "$side" ]]; then
+        case $side in
+            src|source)
+                shift
+                ;;
+            dst|dest)
+                shift
+                qemu_extra="-incoming tcp:localhost:12345"
+                ;;
+            *)
+                # Ignore the rest and make them guest kernel parameters
+                ;;
+        esac
+    fi
+
+    if [[ -f $qemu_tracefile ]]; then
+        echo "Detected qemu tracefile $qemu_tracefile, enabling"
+        qemu_extra="$qemu_extra -trace events=$qemu_tracefile"
+    else
+        echo "Didn't detect qemu tracefile $qemu_tracefile"
+    fi
 
     case $arch in
         x86_64)
@@ -1818,7 +1843,8 @@ do_vm_start_kernel ()
             ;;
     esac
 
-    q -kernel $kernel_path -append "root=$linux_root console=$serial nokaslr $@"
+    q -kernel $kernel_path $qemu_extra \
+      -append "root=$linux_root console=$serial nokaslr hugetlb_cma=2G $@"
 }
 
 do_vm_image_commit ()

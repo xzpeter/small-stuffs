@@ -16,6 +16,7 @@ upstream_keys = ["qemu", "kvm-unit-test", "kvm-unit-tests",
                  "kvm", "linux", "kernel"]
 downstream_keys = ["redhat", "rh"]
 review_keys = ["review", "reviews", "reviewed"]
+discuss_keys = ["discuss", "discussion", "discussed"]
 misc_keys = ["misc", "miscs"]
 done_fmt = re.compile(r'\*+ (DONE|DOING) \[#[ABC]\] (.*)$')
 date_fmt = re.compile(r'\* \[.*\] +- +([ABCD]|\d+)$')
@@ -43,6 +44,8 @@ def status_summary_append_entry(summary, entry_in):
         summary["downstream"].append(entry)
     elif key in review_keys:
         summary["review"].append(entry["title"])
+    elif key in discuss_keys:
+        summary["discuss"].append(entry["title"])
     elif key in misc_keys:
         summary["misc"].append(entry["title"])
     elif key in upstream_keys and \
@@ -65,6 +68,12 @@ def status_summary_dump(summary):
         print("* Reviewed:")
         print("")
         for line in summary["review"]:
+            print("  - %s" % line)
+        print("")
+    if summary["discuss"]:
+        print("* Discussed:")
+        print("")
+        for line in summary["discuss"]:
             print("  - %s" % line)
         print("")
     if summary["misc"]:
@@ -127,6 +136,7 @@ def cmd_generate_status_report(args):
         "major": [],
         # Elements: lines
         "review": [],
+        "discuss": [],
         "misc": [],
     }
 
