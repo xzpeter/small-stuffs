@@ -99,4 +99,5 @@ $qemu_bin -M q35,kernel-irqchip=split -accel kvm \
           -device ioh3420,id=pcie.3,chassis=3 \
           -device virtio-balloon,bus=pcie.3 \
           -device ioh3420,id=pcie.4,chassis=4 \
+          -device e1000e,bus=pcie.4 \
           "$@"

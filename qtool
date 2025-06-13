@@ -1187,7 +1187,7 @@ EOF
     fi
 
     git diff ${commit} | $get_maintainer_script | \
-        sed 's/ (.*//; s/^/CC: /' | grep -vE "$cc_filter_list"
+        sed 's/ (.*//; s/^/Cc: /' | grep -vE "$cc_filter_list"
 }
 
 do_git_commit_set_cc_one ()

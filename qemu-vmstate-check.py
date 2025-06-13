@@ -51,6 +51,7 @@ def configure_and_build(build_dir, archs):
     os.makedirs(build_dir, exist_ok=True)
     config_cmd = [
         os.path.join(QEMU_ROOT, "configure"),
+        "--disable-docs",
         "--target-list=" + ",".join(map(lambda x: f"{x}-softmmu", archs))
     ]
     run(config_cmd, cwd=build_dir)
