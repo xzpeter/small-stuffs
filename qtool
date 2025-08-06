@@ -1844,7 +1844,7 @@ do_vm_start_kernel ()
     esac
 
     q -kernel $kernel_path $qemu_extra \
-      -append "root=$linux_root console=$serial nokaslr hugetlb_cma=2G $@"
+      -append "root=$linux_root console=$serial nokaslr hugepages=128 $@"
 }
 
 do_vm_image_commit ()

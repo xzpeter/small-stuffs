@@ -5,6 +5,7 @@ import os
 import sys
 import json
 import copy
+import math
 import subprocess
 import requests
 import resource
@@ -470,24 +471,20 @@ def cmd_list_bz(args):
 
 def cmd_statistics(args):
     num_list = args[1:]
-    if len(num_list) == 0:
+    n = len(num_list)
+    if n == 0:
         print("Please input a list of numbers for statistics.")
         return -1
     num_list = list(map(float, num_list))
     total = average = 0
     for i in num_list:
         total += i
-    average = total / len(num_list)
-    pos_max = neg_max = 0
+    average = total / n
+    total = 0
     for i in num_list:
-        diff = i - average
-        if diff >= 0 and diff > pos_max:
-            pos_max = diff
-        elif diff < 0 and diff < neg_max:
-            neg_max = diff
-    diff = max(pos_max, -neg_max)
-    diff = diff / average * 100
-    print("Average: %.2f (+-%.2f%%)" % (average, diff))
+        total += (i - average) ** 2
+    diff = math.sqrt(total / n)
+    print("Average: %.2f (±%.2f)" % (average, diff))
     return 0
 
 def cmd_numa_info(args):
