@@ -69,6 +69,7 @@ prepare-send:          prepare one script to send patches
 pci:                   some PCI related operations
 qemu-build:            build QEMU repository.
 qemu-docker-tests:     do proper docker tests for the tree
+run-parallel:          run the same task in parallel with multiple instances
 send-patch:            send patches using git-send-email
 ssh-host:              SSH to host, with line buffering
 statistics:            calculate simple statistics for array of numbers
@@ -1991,6 +1992,47 @@ do_kexec()
     sudo kexec -e
 }
 
+do_run_parallel()
+{
+    # Validate input arguments
+    if [ "$#" -lt 2 ]; then
+        echo "Usage: $0 run-parallel <num_tasks> <command> [args...]"
+        exit 1
+    fi
+
+    # Extract the number of tasks
+    NUM_TASKS=$1
+    shift
+
+    # The rest of the arguments represent the command and its parameters
+    CMD=("$@")
+
+    echo "Created $NUM_TASKS concurrent tasks..."
+
+    # Loop to create background tasks
+    for i in $(seq 1 "$NUM_TASKS"); do
+        (
+            # Execute the command, redirecting stdout and stderr to the log file
+            "${CMD[@]}" > "task-${i}.log" 2>&1
+
+            # Capture the exit status of the command
+            status=$?
+
+            # Print status based on success (0) or failure (non-zero)
+            if [ $status -eq 0 ]; then
+                echo "Task $i completed."
+            else
+                echo "Task $i failed (check log task-${i}.log)"
+            fi
+        ) &
+    done
+
+    # Wait for all background processes to finish before exiting the main script
+    wait
+
+    echo "All tasks finished."
+}
+
 cmd=$1
 shift 1
 
@@ -2037,6 +2079,7 @@ case $cmd in
     vm-start-kernel) do_vm_start_kernel "$@" ;;
     vm-image-commit) do_vm_image_commit $@ ;;
     generate-cscope) do_generate_cscope $@ ;;
+    run-parallel) do_run_parallel $@ ;;
     kexec) do_kexec $@ ;;
     *) usage ;;
 esac

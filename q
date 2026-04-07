@@ -11,7 +11,8 @@ nvdimm_image=~/images/nvdimm1
 mem_size=6G
 # Allow to plug in extra mem
 max_mem_size=16G
-ncpu=$(nproc)
+# Do not use all cpus, to avoid some kernel bugs only happens with all cpus busy
+ncpu=8
 
 ssh_port=5555
 hmp_port=6666
@@ -82,8 +83,11 @@ $qemu_bin -M q35,kernel-irqchip=split -accel kvm \
           -gdb tcp::${gdb_port} \
           -m $mem_size,slots=4,maxmem=$max_mem_size \
           -name peter-vm,debug-threads=on -msg timestamp=on \
-          -nographic -cpu host -smp $ncpu \
-          -device intel-iommu \
+          -object memory-backend-ram,size=4G,id=mem0 \
+          -object memory-backend-ram,size=2G,id=mem1 \
+          -device pc-dimm,slot=0,memdev=mem0 \
+          -device pc-dimm,slot=1,memdev=mem1 \
+          -nographic -cpu host -smp $ncpu,maxcpus=32 \
           -global migration.x-max-bandwidth=1M \
           -global migration.x-events=on \
           -global migration.x-postcopy-ram=on \
@@ -99,5 +103,4 @@ $qemu_bin -M q35,kernel-irqchip=split -accel kvm \
           -device ioh3420,id=pcie.3,chassis=3 \
           -device virtio-balloon,bus=pcie.3 \
           -device ioh3420,id=pcie.4,chassis=4 \
-          -device e1000e,bus=pcie.4 \
-          "$@"
+          "$@" $Q_QEMU_CMDLINE
