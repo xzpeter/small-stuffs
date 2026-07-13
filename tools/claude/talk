@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+import json
+import os
+import sys
+
+topics_file = os.path.expanduser("~/.claude-topics.json")
+topics = None
+try:
+    with open(topics_file) as f:
+        topics = json.load(f)
+except FileNotFoundError:
+    pass
+except json.JSONDecodeError as e:
+    print(f"Error: failed to parse {topics_file}: {e}", file=sys.stderr)
+    sys.exit(1)
+
+os.chdir(os.path.expanduser("~/git"))
+
+if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
+    if topics is None:
+        print(f"Error: {topics_file} not found. Create it first, e.g.:", file=sys.stderr)
+        print(f'  echo \'{{}}\' > {topics_file}', file=sys.stderr)
+        sys.exit(1)
+    if sys.argv[1] not in topics:
+        print(f"Error: unknown topic '{sys.argv[1]}'", file=sys.stderr)
+        print(f"Available topics: {', '.join(sorted(topics)) or '(none)'}", file=sys.stderr)
+        sys.exit(1)
+    session_id = topics[sys.argv[1]]
+    os.execvp("claude", ["claude", "--dangerously-skip-permissions", "--resume", session_id] + sys.argv[2:])
+else:
+    os.execvp("claude", ["claude", "--dangerously-skip-permissions"] + sys.argv[1:])
