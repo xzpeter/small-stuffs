@@ -1870,10 +1870,16 @@ By default, if cscope.files already exists, only run an incremental
 index (cscope -bqk) which re-parses files whose timestamps changed
 since the last index.  This is much faster on large repos like Linux.
 
+Before the incremental index, the file list is refreshed via find and
+compared against the existing cscope.files.  If files were added or
+removed, cscope.files is replaced (triggering cscope to do a full
+re-parse automatically).  If the file list is unchanged, cscope.files
+is left untouched so cscope only re-parses modified files.
+
 Options:
 
-  -f    Force a full re-index: remove all cscope files and regenerate
-        cscope.files from scratch before indexing.
+  -f    Force a full re-index: remove all cscope database files,
+        regenerate cscope.files, and rebuild from scratch.
   -h    Show this help message.
 
 A full re-index is also done automatically when cscope.files does not
@@ -1896,6 +1902,14 @@ EOF
         find . -name "*.[ch]" > cscope.files
         echo "Generating cscope tags (full index)..."
     else
+        local tmplist=$(mktemp)
+        find . -name "*.[ch]" | sort > "$tmplist"
+        if ! sort cscope.files | diff -q - "$tmplist" &> /dev/null; then
+            echo "File list changed, updating cscope.files..."
+            mv "$tmplist" cscope.files
+        else
+            rm -f "$tmplist"
+        fi
         echo "Generating cscope tags (incremental index)..."
     fi
 
