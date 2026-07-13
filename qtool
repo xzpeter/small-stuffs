@@ -42,7 +42,7 @@ fake-editor:           this is a fake editor, it pauses, wait for a
                        SIGUSR1 and then quit with errno=0
 flamegraph-record:     capture perf data for flamegraph
 flamegraph-convert:    convert perf data into perf.svg flamegraph
-generate-cscope:       generate cscope tags for current dir
+generate-cscope:       generate cscope tags for current dir (-f: full)
 git-apply-series:      apply a patchset saved by mutt
 git-commit-set-cc:     auto-generate CC list for commit
                        (this will remove all existing CC list!)
@@ -1855,11 +1855,50 @@ do_vm_image_commit ()
 
 do_generate_cscope ()
 {
-    echo "Cleaning up existing cscope files..."
-    rm -rf ./cscope.*
-    echo "Generating indexing files..."
-    find . -name "*.[ch]" > cscope.files
-    echo "Generating cscope tags..."
+    local force=false
+
+    while [[ -n "$1" ]]; do
+        case "$1" in
+            -f) force=true ;;
+            -h|--help)
+                cat <<EOF
+usage: $prog_name generate-cscope [-f] [-h]
+
+Generate cscope tags for current directory.
+
+By default, if cscope.files already exists, only run an incremental
+index (cscope -bqk) which re-parses files whose timestamps changed
+since the last index.  This is much faster on large repos like Linux.
+
+Options:
+
+  -f    Force a full re-index: remove all cscope files and regenerate
+        cscope.files from scratch before indexing.
+  -h    Show this help message.
+
+A full re-index is also done automatically when cscope.files does not
+exist yet (first run or after manual cleanup).
+EOF
+                return 0
+                ;;
+            *)
+                echo "Unknown option: $1 (use -h for help)"
+                return 1
+                ;;
+        esac
+        shift
+    done
+
+    if $force || [[ ! -f cscope.files ]]; then
+        echo "Cleaning up existing cscope files..."
+        rm -rf ./cscope.*
+        echo "Generating indexing files..."
+        find . -name "*.[ch]" > cscope.files
+        echo "Generating cscope tags (full index)..."
+    else
+        echo "Generating cscope tags (incremental index)..."
+    fi
+
     cscope -bqk &> /tmp/generate-cscope.log
 }
 
